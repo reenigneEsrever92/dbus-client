@@ -13,16 +13,16 @@ fn main() {
     let command = args.get(1);
 
     match command {
-        Some(command) => { 
+        Some(command) => {
             if command.eq(&String::from("list")) {
                 list_names();
                 return;
             } else if command.eq(&String::from("intro")) {
                 introspect(args);
                 return;
-            } 
-        },
-        None => {},
+            }
+        }
+        None => {}
     }
 
     println!("usage:\n");
@@ -35,7 +35,9 @@ fn main() {
 fn list_names() {
     let connection = Connection::new_session().unwrap();
     let proxy = connection.with_proxy("org.freedesktop.DBus", "/", Duration::from_secs(1));
-    let (names, ): (Vec<String>, ) = proxy.method_call("org.freedesktop.DBus", "ListNames", ()).unwrap();
+    let (names,): (Vec<String>,) = proxy
+        .method_call("org.freedesktop.DBus", "ListNames", ())
+        .unwrap();
 
     println!("bus names:\n");
     names.iter().for_each(|name| println!("    {}", name));
