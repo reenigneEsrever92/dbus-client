@@ -1,11 +1,8 @@
-use std::{fmt::Display, time::Duration};
+use std::time::Duration;
 
-use dbus::{
-    arg::RefArg,
-    blocking::{Connection, Proxy},
-};
+use dbus::blocking::{Connection, Proxy};
 use xml::{
-    attribute::{self, Attribute, OwnedAttribute},
+    attribute::OwnedAttribute,
     name::OwnedName,
     reader::{Error, XmlEvent},
     EventReader,
@@ -15,14 +12,10 @@ fn main() {
     let connection = Connection::new_session().unwrap();
     let proxy = connection.with_proxy("org.freedesktop.DBus", "/", Duration::from_secs(1));
 
-    get_node("/", proxy, 0);
+    introspect(proxy, 0);
 }
 
-fn get_node(
-    path: &str,
-    proxy: Proxy<&Connection>,
-    iteration: u32,
-) -> (Vec<String>, Vec<String>) {
+fn introspect(proxy: Proxy<&Connection>, iteration: u32) -> (Vec<String>, Vec<String>) {
     let (capas,): (String,) = proxy
         .method_call("org.freedesktop.DBus.Introspectable", "Introspect", ())
         .unwrap();
@@ -35,14 +28,14 @@ fn get_node(
 
     let parser = EventReader::from_str(capas.as_str());
 
-    let startElements = parser
+    let start_elements = parser
         .into_iter()
         .filter(filter_events)
         .map(map_events)
         .filter(filter_start_elements)
         .map(map_start_elements);
 
-    let nodes = startElements
+    let nodes = start_elements
         .filter(filter_nodes(String::from("node")))
         .filter(filter_with_attribute(String::from("name")))
         .map(map_to_attribute(String::from("name")));
@@ -75,9 +68,7 @@ fn filter_start_elements(event: &XmlEvent) -> bool {
 
 fn map_start_elements(event: XmlEvent) -> (OwnedName, Vec<OwnedAttribute>) {
     if let XmlEvent::StartElement {
-        name,
-        attributes,
-        namespace,
+        name, attributes, ..
     } = event
     {
         (name, attributes)
