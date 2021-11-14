@@ -1,6 +1,15 @@
-use std::{env, time::Duration};
+use std::{
+    env,
+    iter::{Filter, Map},
+    ops::Deref,
+    slice::Iter,
+    time::Duration,
+};
 
-use dbus::blocking::Connection;
+use clap::{App, Arg, SubCommand};
+use dbus::{blocking::Connection, channel::Channel};
+use log::{Level, LevelFilter, debug};
+use simple_logger::SimpleLogger;
 use xml::{
     attribute::OwnedAttribute,
     name::OwnedName,
@@ -9,31 +18,80 @@ use xml::{
 };
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let command = args.get(1);
+    let app = App::new("Dbus client for Introspection")
+        .version("0.1.0")
+        .author("Felix M. <fmarezki@gmail.com>")
+        .about("Interact with dbus")
+        .subcommand(
+            SubCommand::with_name("list-names")
+                .about("List bus names")
+                .alias("ls"),
+        )
+        .subcommand(
+            SubCommand::with_name("introspect")
+                .about("Introspect object under a certain path")
+                .alias("i")
+                .arg(
+                    Arg::with_name("BUS_NAME")
+                        .required(true)
+                        .help("Name of the bus"),
+                )
+                .arg(
+                    Arg::with_name("PATH")
+                        .required(true)
+                        .help("Path of the object to introspect"),
+                ),
+        )
+        .arg(
+            Arg::with_name("v")
+                .short("v")
+                .multiple(true)
+                .help("Sets the verbosity level of the logger"),
+        )
+        .arg(
+            Arg::with_name("address")
+                .short("a")
+                .value_name("ADDRESS")
+                .default_value("session")
+                .help("A custom dbus address")
+                .env("DBUS_CLIENT_ADDRESS"),
+        );
 
-    match command {
-        Some(command) => {
-            if command.eq(&String::from("list")) {
-                list_names();
-                return;
-            } else if command.eq(&String::from("intro")) {
-                introspect(args);
-                return;
-            }
-        }
-        None => {}
+    let matches = app.get_matches();
+
+    match matches.occurrences_of("v") {
+        0 => SimpleLogger::new().with_level(LevelFilter::Error).init().unwrap(),
+        1 => SimpleLogger::new().with_level(LevelFilter::Warn).init().unwrap(),
+        2 => SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap(),
+        3 | _ => SimpleLogger::new().with_level(LevelFilter::Debug).init().unwrap(),
     }
 
-    println!("usage:\n");
-    println!("    {} [command]\n", args.get(0).unwrap());
-    println!("commands:\n");
-    println!("    list");
-    println!("    intro [bus] [path]")
+    if let Some(_) = matches.subcommand_matches("list-names") {
+        let connection = build_connection(matches.value_of("address").unwrap_or_default());
+        list_names(connection);
+    }
+
+    if let Some(cmd) = matches.subcommand_matches("introspect") {
+        let connection = build_connection(matches.value_of("address").unwrap_or_default());
+        introspect(
+            connection,
+            cmd.value_of("BUS_NAME").unwrap().into(),
+            cmd.value_of("PATH").unwrap().into(),
+        );
+    }
 }
 
-fn list_names() {
-    let connection = Connection::new_session().unwrap();
+fn build_connection(address: &str) -> Connection {
+    if address.eq("session") {
+        Connection::from(Channel::get_private(dbus::channel::BusType::Session).unwrap())
+    } else if address.eq("system") {
+        Connection::from(Channel::get_private(dbus::channel::BusType::Session).unwrap())
+    } else {
+        Connection::from(Channel::open_private(address).unwrap())
+    }
+}
+
+fn list_names(connection: Connection) {
     let proxy = connection.with_proxy("org.freedesktop.DBus", "/", Duration::from_secs(1));
     let (names,): (Vec<String>,) = proxy
         .method_call("org.freedesktop.DBus", "ListNames", ())
@@ -43,23 +101,58 @@ fn list_names() {
     names.iter().for_each(|name| println!("    {}", name));
 }
 
-fn introspect(args: Vec<String>) {
-    let bus_name = args.get(2).unwrap().to_owned();
+fn introspect(connection: Connection, bus_name: String, path: String) {
+    let (nodes, interfaces) = do_introspect(connection, bus_name, path);
 
-    let path = args.get(3).unwrap().to_owned();
-
-    let (nodes, interfaces) = do_introspect(bus_name, path);
-
-    println!("object paths:\n");
+    println!("paths:\n");
     nodes.iter().for_each(|node| print(1, node));
 
     println!("\ninterfaces:\n");
     interfaces.iter().for_each(|interface| print(1, interface));
 }
 
-fn do_introspect(bus_name: String, object_path: String) -> (Vec<String>, Vec<String>) {
-    let connection = Connection::new_session().unwrap();
+fn do_introspect(
+    connection: Connection,
+    bus_name: String,
+    object_path: String,
+) -> (Vec<String>, Vec<String>) {
+    let start_elements = get_capas(bus_name, object_path, connection);
 
+    (get_nodes(&start_elements), get_interfaces(&start_elements))
+}
+
+fn get_methods(elements: &Vec<(OwnedName, Vec<OwnedAttribute>)>) -> Vec<String> {
+    elements
+        .iter()
+        .filter(filter_nodes(String::from("interface")))
+        .filter(filter_with_attribute(String::from("name")))
+        .map(map_to_attribute(String::from("name")))
+        .collect()
+}
+
+fn get_interfaces(elements: &Vec<(OwnedName, Vec<OwnedAttribute>)>) -> Vec<String> {
+    elements
+        .iter()
+        .filter(filter_nodes(String::from("interface")))
+        .filter(filter_with_attribute(String::from("name")))
+        .map(map_to_attribute(String::from("name")))
+        .collect()
+}
+
+fn get_nodes(elements: &Vec<(OwnedName, Vec<OwnedAttribute>)>) -> Vec<String> {
+    elements
+        .iter()
+        .filter(filter_nodes(String::from("node")))
+        .filter(filter_with_attribute(String::from("name")))
+        .map(map_to_attribute(String::from("name")))
+        .collect()
+}
+
+fn get_capas(
+    bus_name: String,
+    object_path: String,
+    connection: Connection,
+) -> Vec<(OwnedName, Vec<OwnedAttribute>)> {
     let proxy = connection.with_proxy(
         bus_name,
         if object_path.starts_with("/") {
@@ -74,31 +167,17 @@ fn do_introspect(bus_name: String, object_path: String) -> (Vec<String>, Vec<Str
         .method_call("org.freedesktop.DBus.Introspectable", "Introspect", ())
         .unwrap();
 
+    debug!("{:?}", capas);
+
     let parser = EventReader::from_str(capas.as_str());
 
-    let start_elements = parser
+    parser
         .into_iter()
         .filter(filter_events)
         .map(map_events)
         .filter(filter_start_elements)
         .map(map_start_elements)
-        .collect::<Vec<(OwnedName, Vec<OwnedAttribute>)>>();
-
-    let nodes = start_elements
-        .iter()
-        .filter(filter_nodes(String::from("node")))
-        .filter(filter_with_attribute(String::from("name")))
-        .map(map_to_attribute(String::from("name")));
-
-    let interfaces = start_elements
-        .iter()
-        .filter(filter_nodes(String::from("interface")))
-        .filter(filter_with_attribute(String::from("name")))
-        .map(map_to_attribute(String::from("name")));
-
-    // println!("{}", capas);
-
-    (Vec::from_iter(nodes), Vec::from_iter(interfaces))
+        .collect::<Vec<(OwnedName, Vec<OwnedAttribute>)>>()
 }
 
 fn filter_events(event: &Result<XmlEvent, Error>) -> bool {
