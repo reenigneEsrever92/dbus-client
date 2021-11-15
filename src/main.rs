@@ -1,14 +1,10 @@
 use std::{
-    env,
-    iter::{Filter, Map},
-    ops::Deref,
-    slice::Iter,
     time::Duration,
 };
 
 use clap::{App, Arg, SubCommand};
 use dbus::{blocking::Connection, channel::Channel};
-use log::{debug, Level, LevelFilter};
+use log::{debug, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
     attribute::OwnedAttribute,
@@ -111,67 +107,6 @@ enum Entry {
     },
 }
 
-impl Entry {
-    fn is_node(&self) -> bool {
-        match self {
-            Entry::Node { .. } => true,
-            _ => false,
-        }
-    }
-
-    fn is_interface(&self) -> bool {
-        match self {
-            Entry::Interface { .. } => true,
-            _ => false,
-        }
-    }
-
-    fn is_method(&self) -> bool {
-        match self {
-            Entry::Method { .. } => true,
-            _ => false,
-        }
-    }
-
-    fn is_arg(&self) -> bool {
-        match self {
-            Entry::Arg { .. } => true,
-            _ => false,
-        }
-    }
-
-    fn get_name(&self) -> &String {
-        match self {
-            Entry::Node { name } => name,
-            Entry::Interface { name } => name,
-            Entry::Method { name } => name,
-            Entry::Arg {
-                name,
-                typ,
-                direction,
-            } => name,
-        }
-    }
-
-    fn get_type(&self) -> Option<&String> {
-        match self {
-            Entry::Arg { name, typ, .. } => Some(typ),
-            _ => None,
-        }
-    }
-
-    fn get_direction(&self) -> &Option<String> {
-        match self {
-            Entry::Arg {
-                name: _,
-                typ: _,
-                direction,
-            } => direction,
-            _ => &None,
-        }
-    }
-}
-
 fn build_connection(address: &str) -> Connection {
     if address.eq("session") {
         Connection::from(Channel::get_private(dbus::channel::BusType::Session).unwrap())
@@ -193,59 +128,38 @@ fn list_names(connection: Connection) {
 }
 
 fn introspect(connection: Connection, bus_name: String, path: String) {
-    let (nodes, interfaces) = do_introspect(connection, bus_name, path);
+    // let (nodes, interfaces) = do_introspect(connection, bus_name, path);
+
+    let entries = get_entries(bus_name, path, connection);
 
     println!("paths:\n");
-    nodes.iter().for_each(|node| print(1, node));
+    entries.iter().for_each(|entry| match entry {
+        Entry::Node { name } => print(1, name),
+        _ => {}
+    });
 
     println!("\ninterfaces:\n");
-    interfaces.iter().for_each(|interface| print(1, interface));
+    entries.iter().for_each(|entry| match entry {
+        Entry::Interface { name } => print(1, name),
+        Entry::Method { name } => print(2, name),
+        Entry::Arg {
+            name,
+            typ,
+            direction,
+        } => print(
+            3,
+            &format!(
+                "name: {} typ: {} direction: {}",
+                name,
+                typ,
+                direction.to_owned().unwrap_or("".into())
+            ),
+        ),
+        _ => {}
+    });
 }
 
-fn do_introspect(
-    connection: Connection,
-    bus_name: String,
-    object_path: String,
-) -> (Vec<String>, Vec<String>) {
-    let start_elements = get_capas(bus_name, object_path, connection);
-
-    debug!("{:?}", start_elements);
-
-    (get_nodes(&start_elements), get_interfaces(&start_elements))
-}
-
-fn get_methods(elements: &Vec<Entry>) -> Vec<(String, String, String)> {
-    elements
-        .iter()
-        .filter(|el| el.is_method())
-        .map(|el| {
-            (
-                el.get_name().clone(),
-                el.get_type().unwrap().clone(),
-                el.get_direction().to_owned()
-                    .unwrap_or_else(|| String::from("")),
-            )
-        })
-        .collect()
-}
-
-fn get_interfaces(elements: &Vec<Entry>) -> Vec<String> {
-    elements
-        .iter()
-        .filter(|el| el.is_interface())
-        .map(|el| el.get_name().clone())
-        .collect()
-}
-
-fn get_nodes(elements: &Vec<Entry>) -> Vec<String> {
-    elements
-        .iter()
-        .filter(|el| el.is_node())
-        .map(|el| el.get_name().clone())
-        .collect()
-}
-
-fn get_capas(bus_name: String, object_path: String, connection: Connection) -> Vec<Entry> {
+fn get_entries(bus_name: String, object_path: String, connection: Connection) -> Vec<Entry> {
     let proxy = connection.with_proxy(
         bus_name,
         if object_path.starts_with("/") {
