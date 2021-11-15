@@ -8,7 +8,6 @@ use log::{debug, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
     attribute::OwnedAttribute,
-    name::OwnedName,
     reader::{Error, XmlEvent},
     EventReader,
 };
@@ -107,6 +106,12 @@ enum Entry {
     },
 }
 
+enum ArgType {
+    String,
+    Integer,
+    Boolean,
+}
+
 fn build_connection(address: &str) -> Connection {
     if address.eq("session") {
         Connection::from(Channel::get_private(dbus::channel::BusType::Session).unwrap())
@@ -183,7 +188,7 @@ fn get_entries(bus_name: String, object_path: String, connection: Connection) ->
         .filter(filter_events)
         .map(map_events)
         .filter(filter_start_elements)
-        .filter(filter_with_attribute("name".into()))
+        .filter(filter_with_attribute())
         .map(map_start_elements)
         .filter(|el| el.is_some())
         .map(|el| el.unwrap())
@@ -254,7 +259,7 @@ fn find_attribute<'l>(attrs: &'l Vec<OwnedAttribute>, name: &String) -> Option<&
     attrs.iter().find(|attr| attr.name.local_name.eq(name))
 }
 
-fn filter_with_attribute(attr_name: String) -> impl Fn(&XmlEvent) -> bool {
+fn filter_with_attribute() -> impl Fn(&XmlEvent) -> bool {
     move |elem| match elem {
         XmlEvent::StartElement {
             name: _,
@@ -262,16 +267,6 @@ fn filter_with_attribute(attr_name: String) -> impl Fn(&XmlEvent) -> bool {
             ..
         } => attributes.get("name").is_some(),
         _ => false,
-    }
-}
-
-fn map_to_attribute(attr_name: String) -> impl Fn(&(OwnedName, Vec<OwnedAttribute>)) -> String {
-    move |elem| {
-        let attr: Option<&OwnedAttribute> = elem
-            .1
-            .iter()
-            .find(|attr: &&OwnedAttribute| attr.name.local_name.eq(&attr_name));
-        attr.unwrap().value.clone()
     }
 }
 
