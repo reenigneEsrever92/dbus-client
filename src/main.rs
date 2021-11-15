@@ -8,7 +8,7 @@ use std::{
 
 use clap::{App, Arg, SubCommand};
 use dbus::{blocking::Connection, channel::Channel};
-use log::{Level, LevelFilter, debug};
+use log::{debug, Level, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
     attribute::OwnedAttribute,
@@ -60,10 +60,22 @@ fn main() {
     let matches = app.get_matches();
 
     match matches.occurrences_of("v") {
-        0 => SimpleLogger::new().with_level(LevelFilter::Error).init().unwrap(),
-        1 => SimpleLogger::new().with_level(LevelFilter::Warn).init().unwrap(),
-        2 => SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap(),
-        3 | _ => SimpleLogger::new().with_level(LevelFilter::Debug).init().unwrap(),
+        0 => SimpleLogger::new()
+            .with_level(LevelFilter::Error)
+            .init()
+            .unwrap(),
+        1 => SimpleLogger::new()
+            .with_level(LevelFilter::Warn)
+            .init()
+            .unwrap(),
+        2 => SimpleLogger::new()
+            .with_level(LevelFilter::Info)
+            .init()
+            .unwrap(),
+        3 | _ => SimpleLogger::new()
+            .with_level(LevelFilter::Debug)
+            .init()
+            .unwrap(),
     }
 
     if let Some(_) = matches.subcommand_matches("list-names") {
@@ -78,6 +90,85 @@ fn main() {
             cmd.value_of("BUS_NAME").unwrap().into(),
             cmd.value_of("PATH").unwrap().into(),
         );
+    }
+}
+
+#[derive(Debug)]
+enum Entry {
+    Node {
+        name: String,
+    },
+    Interface {
+        name: String,
+    },
+    Method {
+        name: String,
+    },
+    Arg {
+        name: String,
+        typ: String,
+        direction: Option<String>,
+    },
+}
+
+impl Entry {
+    fn is_node(&self) -> bool {
+        match self {
+            Entry::Node { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn is_interface(&self) -> bool {
+        match self {
+            Entry::Interface { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn is_method(&self) -> bool {
+        match self {
+            Entry::Method { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn is_arg(&self) -> bool {
+        match self {
+            Entry::Arg { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn get_name(&self) -> &String {
+        match self {
+            Entry::Node { name } => name,
+            Entry::Interface { name } => name,
+            Entry::Method { name } => name,
+            Entry::Arg {
+                name,
+                typ,
+                direction,
+            } => name,
+        }
+    }
+
+    fn get_type(&self) -> Option<&String> {
+        match self {
+            Entry::Arg { name, typ, .. } => Some(typ),
+            _ => None,
+        }
+    }
+
+    fn get_direction(&self) -> &Option<String> {
+        match self {
+            Entry::Arg {
+                name: _,
+                typ: _,
+                direction,
+            } => direction,
+            _ => &None,
+        }
     }
 }
 
@@ -118,41 +209,43 @@ fn do_introspect(
 ) -> (Vec<String>, Vec<String>) {
     let start_elements = get_capas(bus_name, object_path, connection);
 
+    debug!("{:?}", start_elements);
+
     (get_nodes(&start_elements), get_interfaces(&start_elements))
 }
 
-fn get_methods(elements: &Vec<(OwnedName, Vec<OwnedAttribute>)>) -> Vec<String> {
+fn get_methods(elements: &Vec<Entry>) -> Vec<(String, String, String)> {
     elements
         .iter()
-        .filter(filter_nodes(String::from("interface")))
-        .filter(filter_with_attribute(String::from("name")))
-        .map(map_to_attribute(String::from("name")))
+        .filter(|el| el.is_method())
+        .map(|el| {
+            (
+                el.get_name().clone(),
+                el.get_type().unwrap().clone(),
+                el.get_direction().to_owned()
+                    .unwrap_or_else(|| String::from("")),
+            )
+        })
         .collect()
 }
 
-fn get_interfaces(elements: &Vec<(OwnedName, Vec<OwnedAttribute>)>) -> Vec<String> {
+fn get_interfaces(elements: &Vec<Entry>) -> Vec<String> {
     elements
         .iter()
-        .filter(filter_nodes(String::from("interface")))
-        .filter(filter_with_attribute(String::from("name")))
-        .map(map_to_attribute(String::from("name")))
+        .filter(|el| el.is_interface())
+        .map(|el| el.get_name().clone())
         .collect()
 }
 
-fn get_nodes(elements: &Vec<(OwnedName, Vec<OwnedAttribute>)>) -> Vec<String> {
+fn get_nodes(elements: &Vec<Entry>) -> Vec<String> {
     elements
         .iter()
-        .filter(filter_nodes(String::from("node")))
-        .filter(filter_with_attribute(String::from("name")))
-        .map(map_to_attribute(String::from("name")))
+        .filter(|el| el.is_node())
+        .map(|el| el.get_name().clone())
         .collect()
 }
 
-fn get_capas(
-    bus_name: String,
-    object_path: String,
-    connection: Connection,
-) -> Vec<(OwnedName, Vec<OwnedAttribute>)> {
+fn get_capas(bus_name: String, object_path: String, connection: Connection) -> Vec<Entry> {
     let proxy = connection.with_proxy(
         bus_name,
         if object_path.starts_with("/") {
@@ -176,8 +269,11 @@ fn get_capas(
         .filter(filter_events)
         .map(map_events)
         .filter(filter_start_elements)
+        .filter(filter_with_attribute("name".into()))
         .map(map_start_elements)
-        .collect::<Vec<(OwnedName, Vec<OwnedAttribute>)>>()
+        .filter(|el| el.is_some())
+        .map(|el| el.unwrap())
+        .collect()
 }
 
 fn filter_events(event: &Result<XmlEvent, Error>) -> bool {
@@ -201,27 +297,57 @@ fn filter_start_elements(event: &XmlEvent) -> bool {
     }
 }
 
-fn map_start_elements(event: XmlEvent) -> (OwnedName, Vec<OwnedAttribute>) {
+fn map_start_elements(event: XmlEvent) -> Option<Entry> {
     if let XmlEvent::StartElement {
         name, attributes, ..
     } = event
     {
-        (name, attributes)
+        match name.local_name.as_str() {
+            "node" => Some(Entry::Node {
+                name: attributes.get("name").unwrap().value.clone(),
+            }),
+            "interface" => Some(Entry::Interface {
+                name: attributes.get("name").unwrap().value.clone(),
+            }),
+            "method" => Some(Entry::Method {
+                name: attributes.get("name").unwrap().value.clone(),
+            }),
+            "arg" => Some(Entry::Arg {
+                name: attributes.get("name").unwrap().value.clone(),
+                typ: attributes.get("type").unwrap().value.clone(),
+                direction: attributes
+                    .get("direction")
+                    .map(|direction| direction.value.clone()),
+            }),
+            _ => None,
+        }
     } else {
         panic!("")
     }
 }
 
-fn filter_nodes(node_type: String) -> impl Fn(&&(OwnedName, Vec<OwnedAttribute>)) -> bool {
-    move |el| el.0.local_name.eq(&node_type)
+trait Gettable {
+    fn get(&self, name: &str) -> Option<&OwnedAttribute>;
 }
 
-fn filter_with_attribute(attr_name: String) -> impl Fn(&&(OwnedName, Vec<OwnedAttribute>)) -> bool {
-    move |elem| {
-        elem.1
-            .iter()
-            .find(|attr: &&OwnedAttribute| attr.name.local_name.eq(&attr_name))
-            .is_some()
+impl Gettable for Vec<OwnedAttribute> {
+    fn get(&self, name: &str) -> Option<&OwnedAttribute> {
+        find_attribute(self, &name.into())
+    }
+}
+
+fn find_attribute<'l>(attrs: &'l Vec<OwnedAttribute>, name: &String) -> Option<&'l OwnedAttribute> {
+    attrs.iter().find(|attr| attr.name.local_name.eq(name))
+}
+
+fn filter_with_attribute(attr_name: String) -> impl Fn(&XmlEvent) -> bool {
+    move |elem| match elem {
+        XmlEvent::StartElement {
+            name: _,
+            attributes,
+            ..
+        } => attributes.get("name").is_some(),
+        _ => false,
     }
 }
 
