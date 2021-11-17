@@ -1,9 +1,13 @@
-use std::{
-    time::Duration,
-};
+use std::{result, time::Duration};
 
-use clap::{App, Arg, SubCommand};
-use dbus::{blocking::Connection, channel::Channel};
+use clap::{App, Arg, SubCommand, Values};
+use dbus::{
+    arg::AppendAll,
+    blocking::{BlockingSender, Connection},
+    channel::Channel,
+    strings::Interface,
+    Message,
+};
 use log::{debug, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
@@ -27,14 +31,42 @@ fn main() {
                 .about("Introspect object under a certain path")
                 .alias("i")
                 .arg(
-                    Arg::with_name("BUS_NAME")
+                    Arg::with_name("bus-name")
                         .required(true)
                         .help("Name of the bus"),
                 )
                 .arg(
-                    Arg::with_name("PATH")
+                    Arg::with_name("path")
                         .required(true)
                         .help("Path of the object to introspect"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("call")
+                .about("Call a method on an interface")
+                .alias("c")
+                .arg(
+                    Arg::with_name("bus-name")
+                        .required(true)
+                        .help("Name of the bus"),
+                )
+                .arg(
+                    Arg::with_name("path")
+                        .required(true)
+                        .help("Path of the object"),
+                )
+                .arg(
+                    Arg::with_name("interface")
+                        .required(true)
+                        .help("Interface name"),
+                )
+                .arg(Arg::with_name("method").required(true).help("Method name"))
+                .arg(
+                    Arg::with_name("argument")
+                        .short("a")
+                        .value_name("ARGUMENT")
+                        .multiple(true)
+                        .help("An argument to pass to the method"),
                 ),
         )
         .arg(
@@ -73,18 +105,36 @@ fn main() {
             .unwrap(),
     }
 
-    if let Some(_) = matches.subcommand_matches("list-names") {
-        let connection = build_connection(matches.value_of("address").unwrap_or_default());
-        list_names(connection);
-    }
+    let connection = build_connection(matches.value_of("address").unwrap_or_default());
 
-    if let Some(cmd) = matches.subcommand_matches("introspect") {
-        let connection = build_connection(matches.value_of("address").unwrap_or_default());
-        introspect(
-            connection,
-            cmd.value_of("BUS_NAME").unwrap().into(),
-            cmd.value_of("PATH").unwrap().into(),
-        );
+    match matches.subcommand() {
+        ("list-names", Some(_cmd)) => {
+            list_names(connection);
+        }
+        ("introspect", Some(cmd)) => {
+            introspect(
+                connection,
+                cmd.value_of("bus-name").unwrap().into(),
+                cmd.value_of("path").unwrap().into(),
+            );
+        }
+        ("call", Some(cmd)) => {
+            let args: Vec<&str> = cmd
+                .values_of("argument")
+                .unwrap_or(Values::default())
+                .collect();
+            call(
+                connection,
+                cmd.value_of("bus-name").unwrap().into(),
+                cmd.value_of("path").unwrap().into(),
+                cmd.value_of("interface").unwrap().into(),
+                cmd.value_of("method").unwrap().into(),
+                (), // TODO args.iter().map(|val| String::from(*val)).collect::<String>().next_tuple()
+            )
+        }
+        _ => {
+            println!("{}", matches.usage())
+        }
     }
 }
 
@@ -112,13 +162,28 @@ enum ArgType {
     Boolean,
 }
 
-fn build_connection(address: &str) -> Connection {
-    if address.eq("session") {
-        Connection::from(Channel::get_private(dbus::channel::BusType::Session).unwrap())
-    } else if address.eq("system") {
-        Connection::from(Channel::get_private(dbus::channel::BusType::Session).unwrap())
-    } else {
-        Connection::from(Channel::open_private(address).unwrap())
+fn call<T: (AppendAll)>(
+    connection: Connection,
+    bus_name: String,
+    path: String,
+    interface_name: String,
+    method_name: String,
+    args: T,
+) {
+    // TODO implement singature/argument stuff 
+    let proxy = connection.with_proxy(bus_name, path, Duration::from_secs(1));
+    
+    match proxy.method_call::<(Vec<String>,), _, _, _>(interface_name, method_name, args) {
+        Ok(result) => {
+            for x in result.0 {
+                println!("{}", x)
+            }
+        }
+        Err(e) => println!(
+            "failed with: {} - {}",
+            e.name().unwrap_or("Unknown error"),
+            e.message().unwrap_or("no message")
+        ),
     }
 }
 
@@ -162,6 +227,16 @@ fn introspect(connection: Connection, bus_name: String, path: String) {
         ),
         _ => {}
     });
+}
+
+fn build_connection(address: &str) -> Connection {
+    if address.eq("session") {
+        Connection::from(Channel::get_private(dbus::channel::BusType::Session).unwrap())
+    } else if address.eq("system") {
+        Connection::from(Channel::get_private(dbus::channel::BusType::Session).unwrap())
+    } else {
+        Connection::from(Channel::open_private(address).unwrap())
+    }
 }
 
 fn get_entries(bus_name: String, object_path: String, connection: Connection) -> Vec<Entry> {

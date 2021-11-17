@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["-vvv", "i", "org.gnome.Shell", "/"],
+            "args": ["c", "org.gnome.Shell", "/org/gnome/Shell", "org.gnome.Shell.Extensions", "ListExtensions"],
             "cwd": "${workspaceFolder}"
         },
         {
