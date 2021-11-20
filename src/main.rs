@@ -1,12 +1,7 @@
 use std::{any::Any, time::Duration};
 
 use clap::{App, Arg, SubCommand, Values};
-use dbus::{
-    arg::{AppendAll, ReadAll, RefArg},
-    blocking::{BlockingSender, Connection},
-    channel::Channel,
-    Message,
-};
+use dbus::{Message, arg::{AppendAll, Arg, ReadAll, RefArg, Variant}, blocking::{BlockingSender, Connection}, channel::Channel};
 use log::{debug, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
@@ -128,7 +123,7 @@ fn main() {
                 cmd.value_of("path").unwrap().into(),
                 cmd.value_of("interface").unwrap().into(),
                 cmd.value_of("method").unwrap().into(),
-                (), // TODO args.iter().map(|val| String::from(*val)).collect::<String>().next_tuple()
+                cmd.value_of("arguments"), 
             )
         }
         _ => {
@@ -163,7 +158,9 @@ fn call<T: (AppendAll)>(
     method_name: String,
     args: T,
 ) {
-    let message = Message::call_with_args(bus_name, path, interface_name, method_name, args);
+    let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
+
+    message.append1(String::from("test"));
 
     let response = connection
         .channel()
