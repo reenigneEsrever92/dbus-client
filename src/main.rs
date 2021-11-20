@@ -1,13 +1,7 @@
-use std::{result, time::Duration};
+use std::{time::Duration};
 
 use clap::{App, Arg, SubCommand, Values};
-use dbus::{
-    arg::AppendAll,
-    blocking::{BlockingSender, Connection},
-    channel::Channel,
-    strings::Interface,
-    Message,
-};
+use dbus::{Message, arg::{AppendAll}, blocking::{Connection}, channel::Channel};
 use log::{debug, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
@@ -156,12 +150,6 @@ enum Entry {
     },
 }
 
-enum ArgType {
-    String,
-    Integer,
-    Boolean,
-}
-
 fn call<T: (AppendAll)>(
     connection: Connection,
     bus_name: String,
@@ -171,20 +159,26 @@ fn call<T: (AppendAll)>(
     args: T,
 ) {
     // TODO implement singature/argument stuff 
-    let proxy = connection.with_proxy(bus_name, path, Duration::from_secs(1));
+    // let proxy = connection.with_proxy(bus_name, path, Duration::from_secs(1));
     
-    match proxy.method_call::<(Vec<String>,), _, _, _>(interface_name, method_name, args) {
-        Ok(result) => {
-            for x in result.0 {
-                println!("{}", x)
-            }
-        }
-        Err(e) => println!(
-            "failed with: {} - {}",
-            e.name().unwrap_or("Unknown error"),
-            e.message().unwrap_or("no message")
-        ),
-    }
+    let message = Message::call_with_args(bus_name, path, interface_name, method_name, args);
+
+    let response = message.iter_init();
+
+    response.for_each(|arg| println!("{:?}", arg));
+
+    // match proxy.method_call::<Message, _, _, _>(interface_name, method_name, args) {
+    //     Ok(result) => {
+    //         for x in result.0 {
+    //             println!("{}", x)
+    //         }
+    //     }
+    //     Err(e) => println!(
+    //         "failed with: {} - {}",
+    //         e.name().unwrap_or("Unknown error"),
+    //         e.message().unwrap_or("no message")
+    //     ),
+    // }
 }
 
 fn list_names(connection: Connection) {
