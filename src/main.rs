@@ -1,7 +1,12 @@
 use std::{any::Any, time::Duration};
 
 use clap::{App, Arg, SubCommand, Values};
-use dbus::{Message, arg::{AppendAll, ReadAll, RefArg}, blocking::{BlockingSender, Connection}, channel::Channel};
+use dbus::{
+    arg::{AppendAll, ReadAll, RefArg},
+    blocking::{BlockingSender, Connection},
+    channel::Channel,
+    Message,
+};
 use log::{debug, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
@@ -160,9 +165,14 @@ fn call<T: (AppendAll)>(
 ) {
     let message = Message::call_with_args(bus_name, path, interface_name, method_name, args);
 
-    let response = connection.channel().send_with_reply_and_block(message, Duration::from_secs(1));
+    let response = connection
+        .channel()
+        .send_with_reply_and_block(message, Duration::from_secs(1));
 
-    response.unwrap().iter_init().for_each(|arg| println!("{:?}", arg));
+    response
+        .unwrap()
+        .iter_init()
+        .for_each(|arg| println!("{:?}", arg));
 }
 
 fn list_names(connection: Connection) {
