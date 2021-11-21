@@ -11,6 +11,8 @@ use xml::{
     EventReader,
 };
 
+mod arguments;
+
 fn main() {
     let app = App::new("Dbus client for Introspection")
         .version("0.1.0")
