@@ -1,7 +1,8 @@
-use std::{any::Any, time::Duration};
+use std::time::Duration;
 
-use clap::{App, Arg, SubCommand, Values};
-use dbus::{Message, arg::{AppendAll, Arg, ReadAll, RefArg, Variant}, blocking::{BlockingSender, Connection}, channel::Channel};
+use clap::{App, Arg, ArgGroup, SubCommand, Values};
+use dbus::{Message, arg::{ArgType, RefArg}, blocking::{BlockingSender, Connection}, channel::Channel};
+use itertools::Itertools;
 use log::{debug, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
@@ -58,9 +59,11 @@ fn main() {
                 .arg(
                     Arg::with_name("argument")
                         .short("a")
-                        .value_name("ARGUMENT")
-                        .multiple(true)
-                        .help("An argument to pass to the method"),
+                        .use_delimiter(true)
+                        .value_delimiter(",")
+                        .takes_value(true)
+                        .help("Argument passed to the method call")
+                        .multiple(true),
                 ),
         )
         .arg(
@@ -71,7 +74,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("address")
-                .short("a")
+                .short("d")
                 .value_name("ADDRESS")
                 .default_value("session")
                 .help("A custom dbus address")
@@ -123,7 +126,11 @@ fn main() {
                 cmd.value_of("path").unwrap().into(),
                 cmd.value_of("interface").unwrap().into(),
                 cmd.value_of("method").unwrap().into(),
-                cmd.value_of("arguments"), 
+                cmd.values_of("argument")
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|arg| arg.split("=").collect_tuple().unwrap())
+                    .collect(),
             )
         }
         _ => {
@@ -150,26 +157,26 @@ enum Entry {
     },
 }
 
-fn call<T: (AppendAll)>(
+fn call(
     connection: Connection,
     bus_name: String,
     path: String,
     interface_name: String,
     method_name: String,
-    args: T,
+    args: Vec<(&str, &str)>,
 ) {
-    let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
+    let mut message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
-    message.append1(String::from("test"));
+    // args.into_iter().map(|arg| ArgType::);
 
     let response = connection
         .channel()
         .send_with_reply_and_block(message, Duration::from_secs(1));
 
-    response
-        .unwrap()
-        .iter_init()
-        .for_each(|arg| println!("{:?}", arg));
+    // response
+    //     .unwrap()
+    //     .iter_init()
+    //     .for_each(|arg| println!("{:?}", arg));
 }
 
 fn list_names(connection: Connection) {
