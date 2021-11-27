@@ -1,7 +1,14 @@
-use std::{collections::HashMap, iter::Map};
+
+
+use std::{collections::HashMap, iter::Map, process::Output, str::FromStr};
 
 use itertools::PadUsing;
+use lazy_static::lazy_static;
 use regex::Regex;
+
+lazy_static! {
+    static ref DICTIONARY_RE: Regex = Regex::new(r"{(\w+: *.+)(, *\w+: *.+)*}").unwrap();
+}
 
 struct Spec {
     value: String
@@ -26,7 +33,7 @@ enum Variant {
     Array(Vec<Variant>),
     Tuple(Vec<Variant>),
     String(Value<String>),
-    Integer32(Value<String>),
+    Integer32(Value<i32>),
     Integer16(Value<String>),
     Integer8(Value<String>),
     Float64(Value<String>),
@@ -123,9 +130,29 @@ impl Val<i32> for i32 {
     }
 }
 
+trait Parsable {
+    fn parsable(arg: &str) -> bool;
+    fn try_parse(arg: &str) -> Result<Box<Self>, ParsingError>;
+}
 
+#[derive(Default)]
 struct Dictionary {
     val: HashMap<Variant, Variant>,
+}
+
+struct Array {
+    val: Vec<Variant>
+}
+
+impl Parsable for Dictionary {
+
+    fn parsable(arg: &str) -> bool {
+        DICTIONARY_RE.is_match(arg)
+    }
+
+    fn try_parse(arg: &str) -> Result<Box<Self>, ParsingError> {
+        Ok(Box::new(Dictionary::default()))
+    }
 }
 
 impl TryFrom<&str> for Dictionary {
@@ -141,6 +168,7 @@ impl TryFrom<&str> for Dictionary {
         }
     }
 }
+
 
 #[derive(Debug)]
 struct ParsingError {
@@ -165,23 +193,35 @@ impl Val<HashMap<Variant, Variant>> for Dictionary {
     }
 }
 
+enum Arguments {
+    Dictionary
+    Array
+}
+
 
 #[cfg(test)]
 mod test {
-    use std::any::Any;
+    use std::{any::Any, collections::hash_set::SymmetricDifference};
 
-    use super::{Dictionary, ParsingError, Val, Value};
+    use super::{Dictionary, Parsable, ParsingError, Val, Value, Variant};
 
 
     #[test]
     fn test_simple() {
+        let dict = Dictionary::try_parse("{ \"key\": 4 }");
+
+        assert_eq!(dict.is_ok(), true);
+    }
+
+    #[test]
+    fn test_simple_positional() {
         let dict: Dictionary = Dictionary::try_from("{si}").unwrap();
-        dict.takes("[{ \"key\": 4 }]");
+        dict.takes("{ \"key\": 4 }");
     }
 
     #[test]
     fn test_parse() {
-        let spec = "{i{s(is)},[i]}";
+        let spec = "{i{s(is)}[i]}";
         let input = "{ integer: 3, dict: { \"key\": (2, \"test\") }, array: [3:i32, 4:i32] }";
     }
 

@@ -1,3 +1,5 @@
+#![feature(associated_type_defaults)]
+
 use std::time::Duration;
 
 use clap::{App, Arg, ArgGroup, SubCommand, Values};
