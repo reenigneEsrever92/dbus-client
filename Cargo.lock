@@ -106,7 +106,6 @@ dependencies = [
  "clap",
  "dbus",
  "itertools",
- "lazy_static",
  "log",
  "nom",
  "regex",

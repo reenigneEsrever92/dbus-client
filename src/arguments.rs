@@ -1,228 +1,129 @@
+use nom::{
+    branch::alt,
+    bytes::complete::{escaped, take_while},
+    character::complete::{alphanumeric1, char, digit1, one_of},
+    combinator::{cut, map, map_res},
+    error::{context, ContextError, FromExternalError, ParseError},
+    multi::separated_list0,
+    sequence::{preceded, terminated},
+    IResult,
+};
 
 
-use std::{collections::HashMap, iter::Map, process::Output, str::FromStr};
-
-use itertools::PadUsing;
-use lazy_static::lazy_static;
-use regex::Regex;
-
-lazy_static! {
-    static ref DICTIONARY_RE: Regex = Regex::new(r"{(\w+: *.+)(, *\w+: *.+)*}").unwrap();
-}
-
-struct Spec {
-    value: String
-}
-
-// struct Instance<T: Value<T>> {
-//     value: Value<Map<String, T>>
-// }
-
-// struct Dictionary<K, T> {
-
-// }
-
-// enum Value {
-//     Dictionary(HashMap<Value, Value>),
-//     Array(Vec<Value>),
-//     Tuple(Vec<Value>)
-// }
-
-enum Variant {
-    Dictionary(HashMap<Variant, Variant>),
+#[derive(Debug, PartialEq)]
+pub enum Variant {
+    Str(String),
+    I32(i32),
     Array(Vec<Variant>),
-    Tuple(Vec<Variant>),
-    String(Value<String>),
-    Integer32(Value<i32>),
-    Integer16(Value<String>),
-    Integer8(Value<String>),
-    Float64(Value<String>),
 }
 
-struct Value<T: Val<T>> {
-    value: T
+fn space<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+    let chars = " \t\r\n";
+
+    // nom combinators like `take_while` return a function. That function is the
+    // parser,to which we can pass the input
+    take_while(move |c| chars.contains(c))(i)
 }
 
-trait Val<T> {
-    fn takes(&self, value: &str) -> bool;
-    fn take(&self, value: &str) -> Result<(), ParsingError>;
-    fn get_val(&self) -> T;
-    fn get_mnemonic() -> &'static str;
+fn string<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
+    i: &'a str,
+) -> IResult<&'a str, Variant, E> {
+    context(
+        "string",
+        map(
+            preceded(
+                char('\"'),
+                cut(terminated(
+                    escaped(alphanumeric1, '\\', one_of("\"n\\")),
+                    char('\"'),
+                )),
+            ),
+            |res: &str| Variant::Str(String::from(res)),
+        ),
+    )(i)
 }
 
-impl Val<i32> for Variant {
-    fn takes(&self, value: &str) -> bool {
-        if let Self::Integer32(value) = self {
-            if true {// TODO check parsable
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    }
-
-    fn take(&self, value: &str)-> Result<(), ParsingError> {
-        todo!()
-    }
-
-    fn get_val(&self) -> i32 {
-        todo!()
-    }
-
-    fn get_mnemonic() -> &'static str {
-        todo!()
-    }
+fn int32<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
+    i: &'a str,
+) -> IResult<&'a str, Variant, E> {
+    context(
+        "i32",
+        map_res(digit1, |res: &str| match res.parse::<i32>() {
+            Ok(int) => Ok(Variant::I32(int)),
+            Err(e) => Err(e),
+        }),
+    )(i)
 }
 
-impl<T> Val<Value<T>> for Value<T> where T: Val<T> {
-    fn takes(&self, value: &str) -> bool {
-        todo!()
-    }
-
-    fn take(&self, value: &str)-> Result<(), ParsingError> {
-        todo!()
-    }
-
-    fn get_val(&self) -> Value<T> {
-        todo!()
-    }
-
-    fn get_mnemonic() -> &'static str {
-        todo!()
-    }
+fn array<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
+    i: &'a str,
+) -> IResult<&'a str, Variant, E> {
+    context(
+        "array",
+        map(
+            preceded(
+                char('['),
+                cut(terminated(
+                    separated_list0(preceded(space, char(',')), variant),
+                    preceded(space, char(']')),
+                )),
+            ),
+            |res| Variant::Array(Vec::from(res)),
+        ),
+    )(i)
 }
 
-impl Val<String> for String {
-    fn takes(&self, value: &str) -> bool {
-        todo!()
-    }
-
-    fn take(&self, value: &str)-> Result<(), ParsingError> {
-        todo!()
-    }
-
-    fn get_val(&self) -> String {
-        todo!()
-    }
-
-    fn get_mnemonic() -> &'static str {
-        todo!()
-    }
+fn variant<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
+    i: &'a str,
+) -> IResult<&'a str, Variant, E> {
+    preceded(space, alt((array, string)))(i)
 }
-
-impl Val<i32> for i32 {
-    fn takes(&self, value: &str) -> bool {
-        todo!()
-    }
-
-    fn take(&self, value: &str)-> Result<(), ParsingError> {
-        todo!()
-    }
-
-    fn get_val(&self) -> i32 {
-        todo!()
-    }
-
-    fn get_mnemonic() -> &'static str {
-        todo!()
-    }
-}
-
-trait Parsable {
-    fn parsable(arg: &str) -> bool;
-    fn try_parse(arg: &str) -> Result<Box<Self>, ParsingError>;
-}
-
-#[derive(Default)]
-struct Dictionary {
-    val: HashMap<Variant, Variant>,
-}
-
-struct Array {
-    val: Vec<Variant>
-}
-
-impl Parsable for Dictionary {
-
-    fn parsable(arg: &str) -> bool {
-        DICTIONARY_RE.is_match(arg)
-    }
-
-    fn try_parse(arg: &str) -> Result<Box<Self>, ParsingError> {
-        Ok(Box::new(Dictionary::default()))
-    }
-}
-
-impl TryFrom<&str> for Dictionary {
-    type Error = ParsingError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let reg = Regex::new(r"\{[si][si]\}").unwrap();
-        
-        if reg.is_match(value) {
-            Ok(Dictionary { val: HashMap::new() })
-        } else {
-            Err(ParsingError {})
-        }
-    }
-}
-
-
-#[derive(Debug)]
-struct ParsingError {
-
-}
-
-impl Val<HashMap<Variant, Variant>> for Dictionary {
-    fn takes(&self, value: &str) -> bool {
-        todo!()
-    }
-
-    fn take(&self, value: &str) -> Result<(), ParsingError> {
-        todo!()
-    }
-
-    fn get_val(&self) -> HashMap<Variant, Variant> {
-        todo!()
-    }
-
-    fn get_mnemonic() -> &'static str {
-        todo!()
-    }
-}
-
-enum Arguments {
-    Dictionary
-    Array
-}
-
 
 #[cfg(test)]
 mod test {
-    use std::{any::Any, collections::hash_set::SymmetricDifference};
+    use std::{any::Any, collections::hash_set::SymmetricDifference, num::ParseIntError};
 
-    use super::{Dictionary, Parsable, ParsingError, Val, Value, Variant};
+    use nom::{character::complete::digit1, combinator::map_res};
 
+    use crate::arguments::{int32, string, Variant};
 
     #[test]
-    fn test_simple() {
-        let dict = Dictionary::try_parse("{ \"key\": 4 }");
+    fn test_i32() {
+        let val: Result<(&str, Variant), nom::Err<nom::error::Error<&str>>> = int32("123");
 
-        assert_eq!(dict.is_ok(), true);
+        assert_eq!(val, Ok(("", Variant::I32(123))));
     }
 
     #[test]
-    fn test_simple_positional() {
-        let dict: Dictionary = Dictionary::try_from("{si}").unwrap();
-        dict.takes("{ \"key\": 4 }");
+    fn test_string() {
+        let val: Result<(&str, Variant), nom::Err<nom::error::Error<&str>>> = string("\"123\"");
+
+        assert_eq!(val, Ok(("", Variant::Str(String::from("123")))));
     }
 
-    #[test]
-    fn test_parse() {
-        let spec = "{i{s(is)}[i]}";
-        let input = "{ integer: 3, dict: { \"key\": (2, \"test\") }, array: [3:i32, 4:i32] }";
-    }
-
+    // #[test]
+    // fn test_parse() {
+    //     let spec = "{i{s(is)}[i]}";
+    //     let input = "{ integer: 3, dict: { \"key\": (2, \"test\") }, array: [3:i32, 4:i32] }";
+    // }
 }
