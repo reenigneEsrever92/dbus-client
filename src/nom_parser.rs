@@ -15,7 +15,7 @@ use crate::{parser::{Parser, ParserError}, variant::{self, Variant}};
 struct NomParser;
 
 impl Parser for NomParser {
-    fn parse(input: &str) -> Result<Variant, crate::parser::ParserError> {
+    fn parse(input: &str) -> Result<Variant, ParserError> {
         Ok(variant(input).map(|result| result.1)?)
     }
 }
