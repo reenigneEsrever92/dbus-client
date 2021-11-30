@@ -13,7 +13,9 @@ use xml::{
     EventReader,
 };
 
-mod arguments;
+pub mod variant;
+mod parser;
+mod nom_parser;
 
 fn main() {
     let app = App::new("Dbus client for Introspection")
