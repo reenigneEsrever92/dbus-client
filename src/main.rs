@@ -1,12 +1,12 @@
-#![feature(associated_type_defaults)]
-
 use std::time::Duration;
 
 use clap::{App, Arg, ArgGroup, SubCommand, Values};
-use dbus::{Message, arg::{ArgType, RefArg}, blocking::{BlockingSender, Connection}, channel::Channel};
+use dbus::{Message, arg::{ArgType, RefArg, messageitem::{MessageItem, MessageItemDict, MessageItemArray}}, blocking::{BlockingSender, Connection}, channel::Channel, message, Signature};
 use itertools::Itertools;
 use log::{debug, LevelFilter};
+use parser::Parser;
 use simple_logger::SimpleLogger;
+use variant::Variant;
 use xml::{
     attribute::OwnedAttribute,
     reader::{Error, XmlEvent},
@@ -64,12 +64,8 @@ fn main() {
                 .arg(Arg::with_name("method").required(true).help("Method name"))
                 .arg(
                     Arg::with_name("argument")
-                        .short("a")
-                        .use_delimiter(true)
-                        .value_delimiter(",")
                         .takes_value(true)
-                        .help("Argument passed to the method call")
-                        .multiple(true),
+                        .help("Argument passed to the method call"),
                 ),
         )
         .arg(
@@ -132,11 +128,12 @@ fn main() {
                 cmd.value_of("path").unwrap().into(),
                 cmd.value_of("interface").unwrap().into(),
                 cmd.value_of("method").unwrap().into(),
-                cmd.values_of("argument")
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|arg| arg.split("=").collect_tuple().unwrap())
-                    .collect(),
+                nom_parser::NomParser::parse(
+                    cmd.value_of("argument")
+                        .unwrap_or_default()
+                        .into()
+                )
+                .unwrap(),
             )
         }
         _ => {
@@ -169,20 +166,55 @@ fn call(
     path: String,
     interface_name: String,
     method_name: String,
-    args: Vec<(&str, &str)>,
+    args: Variant,
 ) {
     let mut message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
+    append_all(&mut message, &args);
+    
     // args.into_iter().map(|arg| ArgType::);
 
     let response = connection
         .channel()
         .send_with_reply_and_block(message, Duration::from_secs(1));
 
-    // response
-    //     .unwrap()
-    //     .iter_init()
-    //     .for_each(|arg| println!("{:?}", arg));
+    response
+        .unwrap()
+        .iter_init()
+        .for_each(|arg| println!("{:?}", arg));
+}
+
+fn convert(variant: &Variant) -> MessageItem {
+            match variant {
+                Variant::Boolean(value) => { MessageItem::Bool(*value) },
+                Variant::Byte(_) => todo!(),
+                Variant::Int16(_) => todo!(),
+                Variant::Int32(_) => todo!(),
+                Variant::Int64(_) => todo!(),
+                Variant::Word16(_) => todo!(),
+                Variant::Word32(_) => todo!(),
+                Variant::Word64(_) => todo!(),
+                Variant::Double(_) => todo!(),
+                Variant::Str(value) => { MessageItem::Str(value.clone()) },
+                Variant::ObjPath(_) => todo!(),
+                Variant::Signature(_) => todo!(),
+                Variant::Array(value) => {
+                    let items = value.into_iter().map(|variant| {
+                        convert(variant)
+                    }).collect_vec();
+
+                    // MessageItem::Array(
+                    //     MessageItemArray::new(items, items.first().into()).unwrap()
+                    // )
+                },
+                Variant::Dictionary(value) => {
+                    let mut entries = Vec::new();
+                    value.into_iter().for_each(|dict_entry| {
+                        entries.append((MessageItem:: dict_entry);
+                    });
+                 },
+                Variant::FileDescriptor(_) => todo!(),
+            }
 }
 
 fn list_names(connection: Connection) {

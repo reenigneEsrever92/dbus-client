@@ -1,18 +1,24 @@
+use std::ops::{Range, RangeFrom, RangeInclusive};
+
 use nom::{
-    branch::alt,
+    branch::{alt, permutation},
     bytes::complete::{escaped, tag, take_while},
-    character::complete::{alphanumeric1, char, digit0, one_of},
+    character::complete::{alpha1, alphanumeric1, char, digit0, digit1, one_of},
     combinator::{cut, map, map_res},
-    error::{context, ContextError, FromExternalError, ParseError},
-    multi::separated_list0,
+    error::{context, ContextError, ErrorKind, FromExternalError, ParseError},
+    multi::{fold_many0, separated_list0},
     number::complete::double,
-    sequence::{preceded, separated_pair, terminated},
-    IResult,
+    sequence::{self, preceded, separated_pair, terminated},
+    AsChar, IResult, InputLength, InputTakeAtPosition, Slice,
+};
+use regex::internal::Char;
+
+use crate::{
+    parser::{Parser, ParserError},
+    variant::{self, Variant},
 };
 
-use crate::{parser::{Parser, ParserError}, variant::{self, Variant}};
-
-struct NomParser;
+pub struct NomParser;
 
 impl Parser for NomParser {
     fn parse(input: &str) -> Result<Variant, ParserError> {
@@ -21,8 +27,8 @@ impl Parser for NomParser {
 }
 
 impl<'l> From<nom::Err<nom::error::Error<&str>>> for ParserError<'l> {
-    fn from(result: nom::Err<nom::error::Error<&str>>) -> Self {
-        todo!()
+    fn from(error: nom::Err<nom::error::Error<&str>>) -> Self {
+        panic!("{}", error);
     }
 }
 
@@ -45,19 +51,56 @@ fn string<
     context(
         "string",
         map(
-            alt((
-                preceded(
-                    char('\"'),
-                    cut(terminated(
-                        escaped(alphanumeric1, '\\', one_of("\"n\\")),
-                        char('\"'),
-                    )),
-                ),
-                escaped(alphanumeric1, '\\', one_of("\"n\\")),
-            )),
+            alt((preceded(char('\"'), cut(terminated(str, char('\"')))), str)),
             |res: &str| Variant::Str(String::from(res)),
         ),
     )(i)
+}
+
+fn str<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
+    i: &'a str,
+) -> IResult<&'a str, &str, E> {
+    context(
+        "str",
+        escaped(
+            concat_orderless(
+                alphanumeric1,
+                concat_orderless(tag("-"), concat_orderless(tag("."), tag("@"))),
+            ),
+            '\\',
+            one_of("\"n\\"),
+        ),
+    )(i)
+}
+
+pub fn concat_orderless<T, E: ParseError<T>, T1, T2>(
+    mut left: T1,
+    mut right: T2,
+) -> impl FnMut(T) -> IResult<T, T, E>
+where
+    T: Copy + Clone + Slice<Range<usize>> + InputLength,
+    T1: FnMut(T) -> IResult<T, T, E>,
+    T2: FnMut(T) -> IResult<T, T, E>,
+{
+    move |input: T| {
+        match left(input.clone()) {
+            Ok(v1) => match right(v1.0) {
+                Ok(v2) => Ok((v2.0, input.slice(0..v1.1.input_len() + v2.1.input_len()))),
+                Err(_) => Ok((v1.0, v1.1)),
+            },
+            Err(_) => {
+                match right(input.clone()) {
+                    Ok(v2) => Ok((v2.0, v2.1)),
+                    Err(e) => Err(e), // TODO better errors
+                }
+            }
+        }
+    }
 }
 
 fn int16<
@@ -313,11 +356,14 @@ mod test {
         let array: Result<(&str, Variant), nom::Err<nom::error::Error<&str>>> =
             variant("[12i32, 13i32]");
 
+        let array2: Result<(&str, Variant), nom::Err<nom::error::Error<&str>>> =
+            variant("[abc, xyz]");
+
         let dict: Result<(&str, Variant), nom::Err<nom::error::Error<&str>>> =
             variant("{\"first\": 12i32, \"second\": 13i32}");
 
         let dict2: Result<(&str, Variant), nom::Err<nom::error::Error<&str>>> =
-            variant("{ first: 12i32, second: 13i32}");
+            variant("{ first: 12i32, second: apps-menu@gnome-shell-extensions.gcampax.github.com}");
 
         assert_eq!(str, Ok(("", Variant::Str(String::from("123")))));
 
@@ -340,6 +386,14 @@ mod test {
         );
 
         assert_eq!(
+            array2,
+            Ok((
+                "",
+                Variant::Array(vec![Variant::Str("abc".to_string()), Variant::Str("xyz".to_string())])
+            ))
+        );
+
+        assert_eq!(
             dict,
             Ok((
                 "",
@@ -356,7 +410,7 @@ mod test {
                 "",
                 Variant::Dictionary(vec![
                     (Variant::Str("first".into()), Variant::Int32(12)),
-                    (Variant::Str("second".into()), Variant::Int32(13))
+                    (Variant::Str("second".into()), Variant::Str(String::from("apps-menu@gnome-shell-extensions.gcampax.github.com")))
                 ])
             ))
         );
