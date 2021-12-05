@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["c", "org.gnome.Shell", "/org/gnome/Shell", "org.gnome.Shell.Extensions", "ListExtensions", "-a", "{  }"],
+            "args": ["c", "org.gnome.Shell", "/org/gnome/Shell", "org.gnome.Shell.Extensions", "GetExtensionInfo", "[gnome-shell-extensions.gcampax.github.com]"],
             "cwd": "${workspaceFolder}"
         },
         {

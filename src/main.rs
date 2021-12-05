@@ -1,7 +1,15 @@
 use std::time::Duration;
 
 use clap::{App, Arg, ArgGroup, SubCommand, Values};
-use dbus::{Message, arg::{ArgType, RefArg, messageitem::{MessageItem, MessageItemDict, MessageItemArray}}, blocking::{BlockingSender, Connection}, channel::Channel, message, Signature};
+use dbus::{
+    arg::{
+        messageitem::{MessageItem, MessageItemArray, MessageItemDict},
+        ArgType, RefArg,
+    },
+    blocking::{BlockingSender, Connection},
+    channel::Channel,
+    message, Message, Signature,
+};
 use itertools::Itertools;
 use log::{debug, LevelFilter};
 use parser::Parser;
@@ -13,9 +21,9 @@ use xml::{
     EventReader,
 };
 
-pub mod variant;
-mod parser;
 mod nom_parser;
+mod parser;
+pub mod variant;
 
 fn main() {
     let app = App::new("Dbus client for Introspection")
@@ -128,12 +136,8 @@ fn main() {
                 cmd.value_of("path").unwrap().into(),
                 cmd.value_of("interface").unwrap().into(),
                 cmd.value_of("method").unwrap().into(),
-                nom_parser::NomParser::parse(
-                    cmd.value_of("argument")
-                        .unwrap_or_default()
-                        .into()
-                )
-                .unwrap(),
+                nom_parser::NomParser::parse(cmd.value_of("argument").unwrap_or_default().into())
+                    .unwrap(),
             )
         }
         _ => {
@@ -170,8 +174,14 @@ fn call(
 ) {
     let mut message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
-    append_all(&mut message, &args);
-    
+    if let Variant::Array(value) = &args {
+        if let MessageItem::Array(array) = convert(&args) {
+            array.into_vec().into_iter().for_each(|arg| {
+                message.append_items(&[arg]);
+            });
+        }
+    }
+
     // args.into_iter().map(|arg| ArgType::);
 
     let response = connection
@@ -185,36 +195,40 @@ fn call(
 }
 
 fn convert(variant: &Variant) -> MessageItem {
-            match variant {
-                Variant::Boolean(value) => { MessageItem::Bool(*value) },
-                Variant::Byte(_) => todo!(),
-                Variant::Int16(_) => todo!(),
-                Variant::Int32(_) => todo!(),
-                Variant::Int64(_) => todo!(),
-                Variant::Word16(_) => todo!(),
-                Variant::Word32(_) => todo!(),
-                Variant::Word64(_) => todo!(),
-                Variant::Double(_) => todo!(),
-                Variant::Str(value) => { MessageItem::Str(value.clone()) },
-                Variant::ObjPath(_) => todo!(),
-                Variant::Signature(_) => todo!(),
-                Variant::Array(value) => {
-                    let items = value.into_iter().map(|variant| {
-                        convert(variant)
-                    }).collect_vec();
+    match variant {
+        Variant::Boolean(value) => MessageItem::Bool(*value),
+        Variant::Byte(_) => todo!(),
+        Variant::Int16(_) => todo!(),
+        Variant::Int32(_) => todo!(),
+        Variant::Int64(_) => todo!(),
+        Variant::Word16(_) => todo!(),
+        Variant::Word32(_) => todo!(),
+        Variant::Word64(_) => todo!(),
+        Variant::Double(_) => todo!(),
+        Variant::Str(value) => MessageItem::Str(value.clone()),
+        Variant::ObjPath(_) => todo!(),
+        Variant::Signature(_) => todo!(),
+        Variant::Array(value) => {
+            let items = value
+                .into_iter()
+                .map(|variant| convert(variant))
+                .collect_vec();
 
-                    // MessageItem::Array(
-                    //     MessageItemArray::new(items, items.first().into()).unwrap()
-                    // )
-                },
-                Variant::Dictionary(value) => {
-                    let mut entries = Vec::new();
-                    value.into_iter().for_each(|dict_entry| {
-                        entries.append((MessageItem:: dict_entry);
-                    });
-                 },
-                Variant::FileDescriptor(_) => todo!(),
-            }
+            let signature = "a".into();
+
+            MessageItem::Array(
+                MessageItemArray::new(items, signature).unwrap(),
+            )
+        }
+        Variant::Dictionary(value) => {
+            todo!()
+            // let mut entries = Vec::new();
+            // value.into_iter().for_each(|dict_entry| {
+            //     entries.append((MessageItem:: dict_entry);
+            // });
+        }
+        Variant::FileDescriptor(_) => todo!(),
+    }
 }
 
 fn list_names(connection: Connection) {
