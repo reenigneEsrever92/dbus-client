@@ -174,7 +174,7 @@ fn call(
 ) {
     let mut message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
-    if let Variant::Array(value) = &args {
+    if let Variant::Array(_) = &args {
         if let MessageItem::Array(array) = convert(&args) {
             array.into_vec().into_iter().for_each(|arg| {
                 message.append_items(&[arg]);
@@ -195,40 +195,7 @@ fn call(
 }
 
 fn convert(variant: &Variant) -> MessageItem {
-    match variant {
-        Variant::Boolean(value) => MessageItem::Bool(*value),
-        Variant::Byte(_) => todo!(),
-        Variant::Int16(_) => todo!(),
-        Variant::Int32(_) => todo!(),
-        Variant::Int64(_) => todo!(),
-        Variant::Word16(_) => todo!(),
-        Variant::Word32(_) => todo!(),
-        Variant::Word64(_) => todo!(),
-        Variant::Double(_) => todo!(),
-        Variant::Str(value) => MessageItem::Str(value.clone()),
-        Variant::ObjPath(_) => todo!(),
-        Variant::Signature(_) => todo!(),
-        Variant::Array(value) => {
-            let items = value
-                .into_iter()
-                .map(|variant| convert(variant))
-                .collect_vec();
-
-            let signature = "a".into();
-
-            MessageItem::Array(
-                MessageItemArray::new(items, signature).unwrap(),
-            )
-        }
-        Variant::Dictionary(value) => {
-            todo!()
-            // let mut entries = Vec::new();
-            // value.into_iter().for_each(|dict_entry| {
-            //     entries.append((MessageItem:: dict_entry);
-            // });
-        }
-        Variant::FileDescriptor(_) => todo!(),
-    }
+    variant.into()
 }
 
 fn list_names(connection: Connection) {
