@@ -1,3 +1,5 @@
-# dbus-test
+# dbus-client
 
-These are the sources for one of my blog posts: [https://blog.reverseengineer.eu/dbus-and-rust/](https://blog.reverseengineer.eu/dbus-and-rust/)
+Aims to be a usable dbus-client some day.
+
+Posting about development on my blog: [https://blog.reverseengineer.eu/dbus-and-rust/](https://blog.reverseengineer.eu/dbus-and-rust/)
