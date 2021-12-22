@@ -14,7 +14,7 @@ use itertools::Itertools;
 use log::{debug, LevelFilter};
 use parser::Parser;
 use simple_logger::SimpleLogger;
-use variant::Variant;
+use dbus_type::DBusType;
 use xml::{
     attribute::OwnedAttribute,
     reader::{Error, XmlEvent},
@@ -23,7 +23,9 @@ use xml::{
 
 mod nom_parser;
 mod parser;
-pub mod variant;
+mod dbus_type;
+mod value;
+mod variant;
 
 fn main() {
     let app = App::new("Dbus client for Introspection")
@@ -136,8 +138,6 @@ fn main() {
                 cmd.value_of("path").unwrap().into(),
                 cmd.value_of("interface").unwrap().into(),
                 cmd.value_of("method").unwrap().into(),
-                nom_parser::NomParser::parse(cmd.value_of("argument").unwrap_or_default().into())
-                    .unwrap(),
             )
         }
         _ => {
@@ -170,17 +170,22 @@ fn call(
     path: String,
     interface_name: String,
     method_name: String,
-    args: Variant,
 ) {
     let mut message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
-    if let Variant::Array(_) = &args {
-        if let MessageItem::Array(array) = convert(&args) {
-            array.into_vec().into_iter().for_each(|arg| {
-                message.append_items(&[arg]);
-            });
-        }
-    }
+    // if let Signature::Array(_) = &args {
+    //     if let MessageItem::Array(array) = convert(&args) {
+    //         array.into_vec().into_iter().for_each(|arg| {
+    //             message.append_items(&[arg]);
+    //         });
+    //     }
+    // }
+
+    // if let Signature::Struct(value) = &args {
+    //     value.iter().for_each(|val| {
+    //         message.append_items(&[convert(&val)])
+    //     });
+    // }
 
     // args.into_iter().map(|arg| ArgType::);
 
@@ -192,10 +197,6 @@ fn call(
         .unwrap()
         .iter_init()
         .for_each(|arg| println!("{:?}", arg));
-}
-
-fn convert(variant: &Variant) -> MessageItem {
-    variant.into()
 }
 
 fn list_names(connection: Connection) {

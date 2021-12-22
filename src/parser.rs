@@ -1,7 +1,7 @@
-use crate::variant::Variant;
+use crate::dbus_type::DBusType;
 
 pub trait Parser {
-    fn parse(input: &str) -> Result<Variant, ParserError>;
+    fn parse(input: &str) -> Result<DBusType, ParserError>;
 }
 
 #[derive(Debug)]
