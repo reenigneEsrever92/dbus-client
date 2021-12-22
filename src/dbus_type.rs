@@ -75,11 +75,10 @@ impl From<&DBusType> for String {
     }
 }
 
-// impl From<&str> for DBusType {
-//     fn from(str: &str) -> Self {
-//         NomParser::parse(str).unwrap()
-//     }
-// }
+impl From<&str> for DBusType {
+    fn from(str: &str) -> Self {
+    }
+}
 
 #[cfg(test)]
 mod test {

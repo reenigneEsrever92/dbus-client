@@ -25,7 +25,7 @@ mod nom_parser;
 mod parser;
 mod dbus_type;
 mod value;
-mod variant;
+mod argument;
 
 fn main() {
     let app = App::new("Dbus client for Introspection")
