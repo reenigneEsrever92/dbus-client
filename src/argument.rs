@@ -25,10 +25,10 @@ impl Argument {
 mod test {
     use crate::{argument::Argument, value::Value};
 
-    #[test]
-    fn test_arguments() {
-        Argument::new("a{si}".to_string().into(), Value::Vec(vec![Value::Str("test".into()), Value::Int32(32)]));
-    }
+    // #[test]
+    // fn test_arguments() {
+    //     Argument::new("a{si}".to_string().into(), Value::Vec(vec![Value::Str("test".into()), Value::Int32(32)]));
+    // }
 }
 
 // impl From<&Variant> for MessageItem {

@@ -1,0 +1,24 @@
+signature = { type_t }
+
+array = { "a" ~ type_t }
+
+struct_t = { "(" ~ type_t+ ~ ")" }
+
+dictionary = { "a{" ~ type_t ~ type_t ~ "}" }
+
+type_t = { BOOLEAN | BYTE | INT_16 | INT_32 | INT_64 | U_INT_16 | U_INT_32 | U_INT_64 | DOUBLE | STRING | OBJ_PATH | SIGNATURE | FILE_DESCRIPTOR | VARIANT | array | struct_t | dictionary }
+
+BOOLEAN = { "b" }
+BYTE = { "y" }
+INT_16 = { "n" }
+INT_32 = { "i" }
+INT_64 = { "x" }
+U_INT_16 = { "q"}
+U_INT_32 = { "u"}
+U_INT_64 = { "t"}
+DOUBLE = { "d" }
+STRING = { "s" }
+OBJ_PATH = { "o" }
+SIGNATURE = { "g" }
+FILE_DESCRIPTOR = { "h" }
+VARIANT = { "v" }
