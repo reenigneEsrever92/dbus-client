@@ -6,7 +6,7 @@ struct_t = { "(" ~ value ~ ("," ~ value)* ~ ")" }
 
 dictionary = { "{" ~ value ~ ":" ~ value ~ ("," ~ value ~ ":" ~ value)* ~ "}" }
 
-value = { BOOLEAN | BYTE | INT_16 | INT_32 | INT_64 | U_INT_16 | U_INT_32 | U_INT_64 | DOUBLE | STRING | array | struct_t | dictionary }
+value = { SPACE_SEPARATOR* ~ (BOOLEAN | BYTE | INT_16 | INT_32 | INT_64 | U_INT_16 | U_INT_32 | U_INT_64 | DOUBLE | STRING | array | struct_t | dictionary) ~ SPACE_SEPARATOR* }
 
 BOOLEAN = { "true" | "false" | "TRUE" | "FALSE" }
 BYTE = { ASCII_HEX_DIGIT ~ ASCII_HEX_DIGIT ~ "y" }
@@ -17,5 +17,4 @@ U_INT_16 = { ASCII_DIGIT+ ~ "q" }
 U_INT_32 = { ASCII_DIGIT+ ~ "u" }
 U_INT_64 = { ASCII_DIGIT+ ~ "t" }
 DOUBLE = { "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? ~ "d" }
-STRING = { "\"" ~ (STRING_SYMBOLS | "\\\"")* ~ "\"" | "'" ~ (STRING_SYMBOLS | "\"")* ~ "'" }
-STRING_SYMBOLS = { LETTER | SPACE_SEPARATOR | NUMBER | "-" | "." | "_" }
+STRING = { "\"" ~ (LETTER | SPACE_SEPARATOR | NUMBER | "-" | "." | "_" | "\\\"")* ~ "\"" }  
