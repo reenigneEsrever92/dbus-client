@@ -2,6 +2,8 @@ use itertools::Itertools;
 use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
 
+use crate::dbus_type::DBusType;
+
 #[derive(Debug, PartialEq)]
 pub enum Value {
     Boolean(bool),
@@ -30,6 +32,29 @@ impl From<&str> for Value {
             .unwrap();
 
         convert_rule(rule)
+    }
+}
+
+impl Value {
+    pub fn is_of_type(&self, typ: DBusType) -> bool {
+        match self {
+            Value::Boolean(_) => if let DBusType::Boolean = typ { true } else { false },
+            Value::Byte(_) => if let DBusType::Byte = typ { true } else { false },
+            Value::Int16(_) => if let DBusType::Int16 = typ { true } else { false },
+            Value::Int32(_) => if let DBusType::Int32 = typ { true } else { false },
+            Value::Int64(_) => if let DBusType::Int64 = typ { true } else { false },
+            Value::Word16(_) => if let DBusType::UInt16 = typ { true } else { false },
+            Value::Word32(_) => if let DBusType::UInt32 = typ { true } else { false },
+            Value::Word64(_) => if let DBusType::UInt64 = typ { true } else { false },
+            Value::Double(_) => if let DBusType::Double = typ { true } else { false },
+            Value::Str(_) => if let DBusType::String = typ { true } else { false },
+            Value::Vec(_) => match typ {
+                DBusType::Struct(_) => true,
+                DBusType::Array { value_type: _ } => true,
+                DBusType::Dictionary { key_type: _, value_type: _ } => true,
+                _ => false
+            },
+        }
     }
 }
 

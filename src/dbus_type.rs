@@ -5,6 +5,8 @@ use itertools::Itertools;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
+use crate::value::Value;
+
 #[derive(Debug, PartialEq)]
 pub enum DBusType {
     Boolean,
@@ -76,6 +78,12 @@ impl From<&DBusType> for String {
                 )
             }
         }
+    }
+}
+
+impl DBusType {
+    pub fn is_value_valid(&self, value: &Value) -> bool {
+        todo!()
     }
 }
 
