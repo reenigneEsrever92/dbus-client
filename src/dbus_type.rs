@@ -33,6 +33,34 @@ pub enum DBusType {
     Variant,
 }
 
+impl DBusType {
+    fn is_valid_value(&self, val: Value) -> bool {
+        match self {
+            DBusType::Boolean => if let Value::Boolean(_) = val { true } else { false },
+            DBusType::Byte => if let Value::Byte(_) = val { true } else { false },
+            DBusType::Int16 => if let Value::Int16(_) = val { true } else { false },
+            DBusType::Int32 => if let Value::Int32(_) = val { true } else { false },
+            DBusType::Int64 => if let Value::Int64(_) = val { true } else { false },
+            DBusType::UInt16 => if let Value::Word16(_) = val { true } else { false },
+            DBusType::UInt32 => if let Value::Word32(_) = val { true } else { false },
+            DBusType::UInt64 => if let Value::Word64(_) = val { true } else { false },
+            DBusType::Double => if let Value::Double(_) = val { true } else { false },
+            DBusType::String => if let Value::Str(_) = val { true } else { false },
+            DBusType::ObjPath => if let Value::Str(_) = val { true } else { false },
+            DBusType::Signature => if let Value::Str(_) = val { true } else { false },
+            DBusType::FileDescriptor => if let Value::Word32(_) = val { true } else { false },
+            DBusType::Struct(_) => if let Value::Vec(_) = val { true } else { false },
+            DBusType::Array { value_type } => if let Value::Vec(vec) = val { 
+                todo!("Check that all values have the same type")
+             } else { false },
+            DBusType::Dictionary { key_type, value_type } => if let Value::Vec(vec) = val { 
+                todo!("Check that all keys and all values have the same type")
+             } else { false },
+            DBusType::Variant => true,
+        }
+    }
+}
+
 #[derive(Parser)]
 #[grammar = "signature.pest"]
 pub struct SignatureParser;

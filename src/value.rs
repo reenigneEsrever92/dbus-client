@@ -36,7 +36,7 @@ impl From<&str> for Value {
 }
 
 impl Value {
-    pub fn is_of_type(&self, typ: DBusType) -> bool {
+    pub fn is_type(&self, typ: DBusType) -> bool {
         match self {
             Value::Boolean(_) => if let DBusType::Boolean = typ { true } else { false },
             Value::Byte(_) => if let DBusType::Byte = typ { true } else { false },
