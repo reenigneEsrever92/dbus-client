@@ -131,6 +131,7 @@ fn main() {
                 cmd.value_of("path").unwrap().into(),
                 cmd.value_of("interface").unwrap().into(),
                 cmd.value_of("method").unwrap().into(),
+                args
             )
         }
         _ => {
@@ -163,6 +164,7 @@ fn call(
     path: String,
     interface_name: String,
     method_name: String,
+    args: Vec<&str>
 ) {
     let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
