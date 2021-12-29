@@ -1,12 +1,10 @@
-argument = { value }
+dbus_value = { SPACE_SEPARATOR* ~ (BOOLEAN | BYTE | INT_16 | INT_32 | INT_64 | U_INT_16 | U_INT_32 | U_INT_64 | DOUBLE | STRING | array | struct_t | dictionary) ~ SPACE_SEPARATOR* }
 
-array = { "[" ~ value ~ ("," ~ value)* ~ "]" }
+array = { "[" ~ dbus_value ~ ("," ~ dbus_value)* ~ "]" }
 
-struct_t = { "(" ~ value ~ ("," ~ value)* ~ ")" }
+struct_t = { "(" ~ dbus_value ~ ("," ~ dbus_value)* ~ ")" }
 
-dictionary = { "{" ~ value ~ ":" ~ value ~ ("," ~ value ~ ":" ~ value)* ~ "}" }
-
-value = { SPACE_SEPARATOR* ~ (BOOLEAN | BYTE | INT_16 | INT_32 | INT_64 | U_INT_16 | U_INT_32 | U_INT_64 | DOUBLE | STRING | array | struct_t | dictionary) ~ SPACE_SEPARATOR* }
+dictionary = { "{" ~ dbus_value ~ ":" ~ dbus_value ~ ("," ~ dbus_value ~ ":" ~ dbus_value)* ~ "}" }
 
 BOOLEAN = { "true" | "false" | "TRUE" | "FALSE" }
 BYTE = { ASCII_HEX_DIGIT ~ ASCII_HEX_DIGIT ~ "y" }

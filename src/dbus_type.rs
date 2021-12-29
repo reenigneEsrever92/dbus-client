@@ -5,7 +5,7 @@ use itertools::Itertools;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
-use crate::value::Value;
+use crate::{argument::DBusError, dbus_value::Value};
 
 #[derive(Debug, PartialEq)]
 pub enum DBusType {
@@ -34,36 +34,183 @@ pub enum DBusType {
 }
 
 impl DBusType {
-    fn is_valid_value(&self, val: Value) -> bool {
+    pub fn is_valid_value(&self, val: &Value) -> Result<(), DBusError> {
         match self {
-            DBusType::Boolean => if let Value::Boolean(_) = val { true } else { false },
-            DBusType::Byte => if let Value::Byte(_) = val { true } else { false },
-            DBusType::Int16 => if let Value::Int16(_) = val { true } else { false },
-            DBusType::Int32 => if let Value::Int32(_) = val { true } else { false },
-            DBusType::Int64 => if let Value::Int64(_) = val { true } else { false },
-            DBusType::UInt16 => if let Value::Word16(_) = val { true } else { false },
-            DBusType::UInt32 => if let Value::Word32(_) = val { true } else { false },
-            DBusType::UInt64 => if let Value::Word64(_) = val { true } else { false },
-            DBusType::Double => if let Value::Double(_) = val { true } else { false },
-            DBusType::String => if let Value::Str(_) = val { true } else { false },
-            DBusType::ObjPath => if let Value::Str(_) = val { true } else { false },
-            DBusType::Signature => if let Value::Str(_) = val { true } else { false },
-            DBusType::FileDescriptor => if let Value::Word32(_) = val { true } else { false },
-            DBusType::Struct(_) => if let Value::Vec(_) = val { true } else { false },
-            DBusType::Array { value_type } => if let Value::Vec(vec) = val { 
-                todo!("Check that all values have the same type")
-             } else { false },
-            DBusType::Dictionary { key_type, value_type } => if let Value::Vec(vec) = val { 
-                todo!("Check that all keys and all values have the same type")
-             } else { false },
-            DBusType::Variant => true,
+            DBusType::Boolean => {
+                if let Value::Boolean(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected boolean got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Byte => {
+                if let Value::Byte(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected byte got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Int16 => {
+                if let Value::Int16(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected int16 got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Int32 => {
+                if let Value::Int32(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected int32 got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Int64 => {
+                if let Value::Int64(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected int64 got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::UInt16 => {
+                if let Value::UInt16(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected uint16 got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::UInt32 => {
+                if let Value::UInt32(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected uint32 got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::UInt64 => {
+                if let Value::UInt64(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected uint64 got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Double => {
+                if let Value::Double(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected double got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::String => {
+                if let Value::String(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected string got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::ObjPath => {
+                if let Value::String(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected string got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Signature => {
+                if let Value::String(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected string got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::FileDescriptor => {
+                if let Value::UInt32(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected uint32 got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Struct(_) => {
+                if let Value::Vec(_) = val {
+                    Ok(())
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected vec got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Array { value_type: _ } => {
+                if let Value::Vec(_vec) = val {
+                    todo!("Check that all values have the same type")
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected vec got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Dictionary {
+                key_type,
+                value_type,
+            } => {
+                if let Value::Vec(vec) = val {
+                    vec.iter()
+                        .step_by(2)
+                        .map(|inner_val| key_type.is_valid_value(inner_val))
+                        .find(|inner_val| *inner_val != Ok(()))
+                        .map_or(Ok(()), |error| Err(DBusError::InvalidValue(format!("Wrong dictionary key"))))
+                } else {
+                    Err(DBusError::InvalidValue(format!(
+                        "Expected vec got: {:?}",
+                        val
+                    )))
+                }
+            }
+            DBusType::Variant => Ok(()),
         }
     }
 }
 
 #[derive(Parser)]
-#[grammar = "signature.pest"]
-pub struct SignatureParser;
+#[grammar = "dbus_type.pest"]
+pub struct DBusTypeParser;
 
 impl<'a> From<&DBusType> for DbusSignature<'a> {
     fn from(variant: &DBusType) -> Self {
@@ -109,15 +256,9 @@ impl From<&DBusType> for String {
     }
 }
 
-impl DBusType {
-    pub fn is_value_valid(&self, value: &Value) -> bool {
-        todo!()
-    }
-}
-
 impl From<&str> for DBusType {
     fn from(str: &str) -> DBusType {
-        let ast = SignatureParser::parse(Rule::signature, str)
+        let ast = DBusTypeParser::parse(Rule::dbus_type, str)
             .expect("Invalid Signature")
             .next()
             .unwrap();
@@ -128,7 +269,7 @@ impl From<&str> for DBusType {
 
 fn convert_rule(rule: Pair<Rule>) -> DBusType {
     match rule.as_rule() {
-        Rule::signature => convert_rule(rule.into_inner().next().unwrap()),
+        Rule::dbus_type => convert_rule(rule.into_inner().next().unwrap()),
         Rule::array => DBusType::Array {
             value_type: Box::new(convert_rule(rule.into_inner().next().unwrap())),
         },
@@ -145,7 +286,6 @@ fn convert_rule(rule: Pair<Rule>) -> DBusType {
                 value_type: Box::new(convert_rule(inner_rule.next().unwrap())),
             }
         }
-        Rule::type_t => convert_rule(rule.into_inner().next().unwrap()),
         Rule::BOOLEAN => DBusType::Boolean,
         Rule::BYTE => DBusType::Byte,
         Rule::INT_16 => DBusType::Int16,
@@ -173,10 +313,7 @@ mod test {
     fn test_conversions() {
         assert_eq!(Into::<String>::into(&DBusType::String), "s".to_string());
 
-        assert_eq!(
-            Into::<String>::into(&DBusType::Variant),
-            "v".to_string()
-        );
+        assert_eq!(Into::<String>::into(&DBusType::Variant), "v".to_string());
 
         assert_eq!(
             Into::<String>::into(&DBusType::Array {

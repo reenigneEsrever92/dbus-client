@@ -1,34 +1,44 @@
-use dbus::arg::messageitem::MessageItem;
-
-use crate::{dbus_type::DBusType, value::Value};
+use crate::{dbus_type::DBusType, dbus_value::Value};
 
 pub struct Argument {
-    signature: Box<DBusType>, // heap allocated as signatures have unknwon size
-    value: Value,
+    dbus_type: Box<DBusType>, // heap allocated as signatures have unknwon size
+    dbus_value: Value,
 }
 
-pub enum ArgumentError {
+#[derive(Debug, PartialEq, Eq)]
+pub enum DBusError {
     InvalidSignature,
+    InvalidValue(String),
 }
 
 impl Argument {
-    pub fn new(signature: DBusType, value: Value) -> Self {
-        Self { signature: Box::new(signature), value }
+    pub fn new(dbus_type: DBusType, dbus_value: Value) -> Self {
+        Self {
+            dbus_type: Box::new(dbus_type),
+            dbus_value,
+        }
     }
 
-    pub fn validate(&self) -> Result<(), ArgumentError> {
-        todo!()
+    pub fn validate(&self) -> Result<(), DBusError> {
+        self.dbus_type.is_valid_value(&self.dbus_value)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{argument::Argument, value::Value};
+    use crate::{argument::Argument, dbus_value::Value};
 
-    // #[test]
-    // fn test_arguments() {
-    //     Argument::new("a{si}".to_string().into(), Value::Vec(vec![Value::Str("test".into()), Value::Int32(32)]));
-    // }
+    #[test]
+    fn test_arguments() {
+        let argument = Argument::new(
+            "a{si}".into(),
+            Value::Vec(vec![Value::String("test".into()), Value::Int32(32)]),
+        );
+
+        assert_eq!(argument.validate(), Ok(()));
+
+        assert!(Argument::new("i".into(), Value::Int16(16)).validate().is_err())
+    }
 }
 
 // impl From<&Variant> for MessageItem {

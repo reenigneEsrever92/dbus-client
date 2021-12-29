@@ -1,20 +1,13 @@
 use std::time::Duration;
 
-use clap::{App, Arg, ArgGroup, SubCommand, Values};
+use clap::{App, Arg, SubCommand, Values};
 use dbus::{
-    arg::{
-        messageitem::{MessageItem, MessageItemArray, MessageItemDict},
-        ArgType, RefArg,
-    },
-    blocking::{BlockingSender, Connection},
+    blocking::Connection,
     channel::Channel,
-    message, Message, Signature,
+    Message,
 };
-use itertools::Itertools;
 use log::{debug, LevelFilter};
-use parser::Parser;
 use simple_logger::SimpleLogger;
-use dbus_type::DBusType;
 use xml::{
     attribute::OwnedAttribute,
     reader::{Error, XmlEvent},
@@ -24,7 +17,7 @@ use xml::{
 mod nom_parser;
 mod parser;
 mod dbus_type;
-mod value;
+mod dbus_value;
 mod argument;
 
 fn main() {
@@ -171,7 +164,7 @@ fn call(
     interface_name: String,
     method_name: String,
 ) {
-    let mut message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
+    let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
     // if let Signature::Array(_) = &args {
     //     if let MessageItem::Array(array) = convert(&args) {
