@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["c", "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Notification", "AddNotification", "(test, {key: value})"],
+            "args": ["c", "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus.Properties", "GetAll"],
             "cwd": "${workspaceFolder}"
         },
         {

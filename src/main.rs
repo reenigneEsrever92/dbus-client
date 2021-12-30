@@ -6,6 +6,7 @@ use dbus::{
     channel::Channel,
     Message,
 };
+use dbus_value::Value;
 use log::{debug, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
@@ -14,8 +15,6 @@ use xml::{
     EventReader,
 };
 
-mod nom_parser;
-mod parser;
 mod dbus_type;
 mod dbus_value;
 mod argument;
@@ -68,6 +67,7 @@ fn main() {
                 .arg(
                     Arg::with_name("argument")
                         .takes_value(true)
+                        .required(false)
                         .help("Argument passed to the method call"),
                 ),
         )
@@ -121,17 +121,13 @@ fn main() {
             );
         }
         ("call", Some(cmd)) => {
-            let args: Vec<&str> = cmd
-                .values_of("argument")
-                .unwrap_or(Values::default())
-                .collect();
             call(
                 connection,
                 cmd.value_of("bus-name").unwrap().into(),
                 cmd.value_of("path").unwrap().into(),
                 cmd.value_of("interface").unwrap().into(),
                 cmd.value_of("method").unwrap().into(),
-                args
+                cmd.value_of("argument")
             )
         }
         _ => {
@@ -164,9 +160,11 @@ fn call(
     path: String,
     interface_name: String,
     method_name: String,
-    args: Vec<&str>
+    args: Option<&str>
 ) {
     let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
+
+    let value: Option<Value> = args.map(|arg| arg.into());
 
     // if let Signature::Array(_) = &args {
     //     if let MessageItem::Array(array) = convert(&args) {
@@ -176,11 +174,13 @@ fn call(
     //     }
     // }
 
-    // if let Signature::Struct(value) = &args {
-    //     value.iter().for_each(|val| {
-    //         message.append_items(&[convert(&val)])
-    //     });
-    // }
+    if let Some(val) = value {
+    if let Value::Vec(vec) = val {
+        vec.iter().for_each(|_| {
+            // message.append_items(&[convert(&val)])
+        });
+    }
+}
 
     // args.into_iter().map(|arg| ArgType::);
 
@@ -188,11 +188,27 @@ fn call(
         .channel()
         .send_with_reply_and_block(message, Duration::from_secs(1));
 
-    response
-        .unwrap()
-        .iter_init()
-        .for_each(|arg| println!("{:?}", arg));
+    let error = response.err().unwrap();
+
+    println!("{}", error.name().unwrap());
+    println!("{}", error.message().unwrap());
 }
+
+// fn convert(val: &Value) -> MessageItem {
+//     match val {
+//         Value::Boolean(_) => todo!(),
+//         Value::Byte(_) => todo!(),
+//         Value::Int16(_) => todo!(),
+//         Value::Int32(_) => todo!(),
+//         Value::Int64(_) => todo!(),
+//         Value::UInt16(_) => todo!(),
+//         Value::UInt32(_) => todo!(),
+//         Value::UInt64(_) => todo!(),
+//         Value::Double(_) => todo!(),
+//         Value::String(_) => todo!(),
+//         Value::Vec(_) => todo!(),
+//     }
+// }
 
 fn list_names(connection: Connection) {
     let proxy = connection.with_proxy("org.freedesktop.DBus", "/", Duration::from_secs(1));
