@@ -6,8 +6,9 @@ use dbus::{
     channel::Channel,
     Message,
 };
+use dbus_type::DBusType;
 use dbus_value::Value;
-use log::{debug, LevelFilter};
+use log::{debug, LevelFilter, warn};
 use simple_logger::SimpleLogger;
 use xml::{
     attribute::OwnedAttribute,
@@ -136,6 +137,10 @@ fn main() {
     }
 }
 
+trait Signature {
+    fn get_signature() -> String;
+}
+
 #[derive(Debug)]
 enum Entry {
     Node {
@@ -143,16 +148,18 @@ enum Entry {
     },
     Interface {
         name: String,
+        methods: Vec<Method>
     },
-    Method {
+    Signal {
         name: String,
-    },
-    Arg {
-        name: String,
-        typ: String,
-        direction: Option<String>,
     },
 }
+
+#[derive(Debug)]
+struct Method { name: String, args: Vec<Argument> }
+
+#[derive(Debug)]
+struct Argument { name: String, typ: String, direction: Option<String> }
 
 fn call(
     connection: Connection,
@@ -175,12 +182,12 @@ fn call(
     // }
 
     if let Some(val) = value {
-    if let Value::Vec(vec) = val {
-        vec.iter().for_each(|_| {
-            // message.append_items(&[convert(&val)])
-        });
+        if let Value::Vec(vec) = val {
+            vec.iter().for_each(|_| {
+                // message.append_items(&[convert(&val)])
+            });
+        }
     }
-}
 
     // args.into_iter().map(|arg| ArgType::);
 
@@ -193,6 +200,18 @@ fn call(
     println!("{}", error.name().unwrap());
     println!("{}", error.message().unwrap());
 }
+
+// fn do_call(
+//     connection: Connection,
+//     bus_name: String,
+//     path: String,
+//     interface_name: String,
+//     method_name: String,
+//     values: Vec<Value>,
+//     signature: DBusType
+// ) {
+//     let 
+// }
 
 // fn convert(val: &Value) -> MessageItem {
 //     match val {
@@ -223,7 +242,7 @@ fn list_names(connection: Connection) {
 fn introspect(connection: Connection, bus_name: String, path: String) {
     // let (nodes, interfaces) = do_introspect(connection, bus_name, path);
 
-    let entries = get_entries(bus_name, path, connection);
+    let entries = describe(bus_name, path, connection);
 
     println!("paths:\n");
     entries.iter().for_each(|entry| match entry {
@@ -233,21 +252,7 @@ fn introspect(connection: Connection, bus_name: String, path: String) {
 
     println!("\ninterfaces:\n");
     entries.iter().for_each(|entry| match entry {
-        Entry::Interface { name } => print(1, name),
-        Entry::Method { name } => print(2, name),
-        Entry::Arg {
-            name,
-            typ,
-            direction,
-        } => print(
-            3,
-            &format!(
-                "name: {} typ: {} direction: {}",
-                name,
-                typ,
-                direction.to_owned().unwrap_or("".into())
-            ),
-        ),
+        Entry::Interface { name, methods: _ } => print(1, name),
         _ => {}
     });
 }
@@ -262,7 +267,7 @@ fn build_connection(address: &str) -> Connection {
     }
 }
 
-fn get_entries(bus_name: String, object_path: String, connection: Connection) -> Vec<Entry> {
+fn describe(bus_name: String, object_path: String, connection: Connection) -> Vec<Entry> {
     let proxy = connection.with_proxy(
         bus_name,
         if object_path.starts_with("/") {
@@ -279,68 +284,44 @@ fn get_entries(bus_name: String, object_path: String, connection: Connection) ->
 
     debug!("{:?}", capas);
 
+    let mut entries = Vec::new();
     let parser = EventReader::from_str(capas.as_str());
 
-    parser
-        .into_iter()
-        .filter(filter_events)
-        .map(map_events)
-        .filter(filter_start_elements)
-        .filter(filter_with_attribute())
-        .map(map_start_elements)
-        .filter(|el| el.is_some())
-        .map(|el| el.unwrap())
-        .collect()
-}
-
-fn filter_events(event: &Result<XmlEvent, Error>) -> bool {
-    match event {
-        Ok(_) => true,
-        Err(_) => false,
-    }
-}
-
-fn map_events(event: Result<XmlEvent, Error>) -> XmlEvent {
-    match event {
-        Ok(event) => event,
-        Err(_) => todo!(),
-    }
-}
-
-fn filter_start_elements(event: &XmlEvent) -> bool {
-    match event {
-        XmlEvent::StartElement { .. } => true,
-        _ => false,
-    }
-}
-
-fn map_start_elements(event: XmlEvent) -> Option<Entry> {
-    if let XmlEvent::StartElement {
-        name, attributes, ..
-    } = event
-    {
-        match name.local_name.as_str() {
-            "node" => Some(Entry::Node {
-                name: attributes.get("name").unwrap().value.clone(),
-            }),
-            "interface" => Some(Entry::Interface {
-                name: attributes.get("name").unwrap().value.clone(),
-            }),
-            "method" => Some(Entry::Method {
-                name: attributes.get("name").unwrap().value.clone(),
-            }),
-            "arg" => Some(Entry::Arg {
-                name: attributes.get("name").unwrap().value.clone(),
-                typ: attributes.get("type").unwrap().value.clone(),
-                direction: attributes
-                    .get("direction")
-                    .map(|direction| direction.value.clone()),
-            }),
-            _ => None,
+    for e in parser {
+        match e {
+            Ok(elem) => {
+                match elem {
+                    XmlEvent::StartElement { name, attributes, namespace } => {
+                        match name.local_name.as_str() {
+                            "node" => entries.push(Entry::Node { name: attributes.get("name").unwrap().value.clone() }),
+                            "interface" => entries.push(Entry::Interface { name: attributes.get("name").unwrap().value.clone(), methods: Vec::new() }),
+                            "signal" => entries.push(Entry::Signal { name: attributes.get("name").unwrap().value.clone() }),
+                            "method" => if let Entry::Interface{ name: _, methods } = entries.last_mut().unwrap() { 
+                                (*methods).push( Method {name: attributes.get("name").unwrap().value.clone(), args: Vec::new() });
+                            } else {},
+                            "arg" => if let Entry::Interface{ name: _, methods } = entries.last_mut().unwrap() { 
+                                let method = methods.last_mut().unwrap();
+                                
+                                method.args.push( Argument { 
+                                    name: attributes.get("name").unwrap().value.clone(),
+                                    typ: attributes.get("type").unwrap().value.clone(),
+                                    direction: attributes
+                                        .get("direction")
+                                        .map(|direction| direction.value.clone()),
+                                 });
+                            } else {}
+                            _ => {}
+                        }
+                    },
+                    // XmlEvent::EndElement { name } => todo!(),
+                    _ => {}
+                }
+            },
+            Err(err) => warn!("Xml error: {:?}", err),
         }
-    } else {
-        panic!("")
-    }
+    };
+
+    entries
 }
 
 trait Gettable {
@@ -355,17 +336,6 @@ impl Gettable for Vec<OwnedAttribute> {
 
 fn find_attribute<'l>(attrs: &'l Vec<OwnedAttribute>, name: &String) -> Option<&'l OwnedAttribute> {
     attrs.iter().find(|attr| attr.name.local_name.eq(name))
-}
-
-fn filter_with_attribute() -> impl Fn(&XmlEvent) -> bool {
-    move |elem| match elem {
-        XmlEvent::StartElement {
-            name: _,
-            attributes,
-            ..
-        } => attributes.get("name").is_some(),
-        _ => false,
-    }
 }
 
 fn print(indent: u32, subject: &String) {
