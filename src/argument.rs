@@ -1,8 +1,8 @@
 use crate::{dbus_type::DBusType, dbus_value::Value};
 
 pub struct Argument {
-    dbus_type: Box<DBusType>, // heap allocated as signatures have unknwon size
-    dbus_value: Value,
+    pub dbus_type: Box<DBusType>, // heap allocated as signatures have unknwon size
+    pub dbus_value: Value,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -19,8 +19,8 @@ impl Argument {
         }
     }
 
-    pub fn validate(&self) -> Result<(), DBusError> {
-        self.dbus_type.is_valid_value(&self.dbus_value)
+    pub fn validate(self) -> Result<Argument, DBusError> {
+        self.dbus_type.is_valid_value(&self.dbus_value).map(|_| self)
     }
 }
 

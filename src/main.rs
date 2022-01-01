@@ -201,33 +201,34 @@ fn call(
     println!("{}", error.message().unwrap());
 }
 
-// fn do_call(
-//     connection: Connection,
-//     bus_name: String,
-//     path: String,
-//     interface_name: String,
-//     method_name: String,
-//     values: Vec<Value>,
-//     signature: DBusType
-// ) {
-//     let 
-// }
+fn do_call(
+    connection: Connection,
+    bus_name: String,
+    path: String,
+    interface_name: String,
+    method_name: String,
+    argument: argument::Argument
+) {
+    match argument.validate() {
+        Ok(arg) => {
+            if let DBusType::Struct(args) {
+                let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
-// fn convert(val: &Value) -> MessageItem {
-//     match val {
-//         Value::Boolean(_) => todo!(),
-//         Value::Byte(_) => todo!(),
-//         Value::Int16(_) => todo!(),
-//         Value::Int32(_) => todo!(),
-//         Value::Int64(_) => todo!(),
-//         Value::UInt16(_) => todo!(),
-//         Value::UInt32(_) => todo!(),
-//         Value::UInt64(_) => todo!(),
-//         Value::Double(_) => todo!(),
-//         Value::String(_) => todo!(),
-//         Value::Vec(_) => todo!(),
-//     }
-// }
+                args.iter().for_each(|arg| {
+                    message.append_items(&[arg])
+                });
+            } else {
+                println!("Expected outer most argument to be of type struct");
+            }
+        },
+        Err(e) => println!("Invalid argument: {:?}", e),
+    }
+}
+
+fn convert(arg: &argument::Argument) -> MessageItem {
+    match arg.dbus_type {
+    }
+}
 
 fn list_names(connection: Connection) {
     let proxy = connection.with_proxy("org.freedesktop.DBus", "/", Duration::from_secs(1));
@@ -290,10 +291,13 @@ fn describe(bus_name: String, object_path: String, connection: Connection) -> Ve
     for e in parser {
         match e {
             Ok(elem) => {
+                debug!("{:?}", elem);
                 match elem {
-                    XmlEvent::StartElement { name, attributes, namespace } => {
+                    XmlEvent::StartElement { name, attributes, namespace: _ } => {
                         match name.local_name.as_str() {
-                            "node" => entries.push(Entry::Node { name: attributes.get("name").unwrap().value.clone() }),
+                            "node" => if attributes.get("name").is_some() { 
+                                entries.push(Entry::Node { name: attributes.get("name").unwrap().value.clone() })
+                            },
                             "interface" => entries.push(Entry::Interface { name: attributes.get("name").unwrap().value.clone(), methods: Vec::new() }),
                             "signal" => entries.push(Entry::Signal { name: attributes.get("name").unwrap().value.clone() }),
                             "method" => if let Entry::Interface{ name: _, methods } = entries.last_mut().unwrap() { 
