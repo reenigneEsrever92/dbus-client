@@ -5,7 +5,7 @@ use pest_derive::Parser;
 use crate::dbus_type::DBusType;
 
 #[derive(Debug, PartialEq)]
-pub enum Value {
+pub enum DBusValue {
     Boolean(bool),
     Byte(u8),
     Int16(i16),
@@ -16,7 +16,7 @@ pub enum Value {
     UInt64(u64),
     Double(f64),
     String(String),
-    Vec(Vec<Value>)
+    Vec(Vec<DBusValue>)
 }
 
 
@@ -24,7 +24,7 @@ pub enum Value {
 #[grammar = "dbus_value.pest"]
 struct ValueParser;
 
-impl From<&str> for Value {
+impl From<&str> for DBusValue {
     fn from(str: &str) -> Self {
         let rule = ValueParser::parse(Rule::dbus_value, str)
             .expect("Invalid Value")
@@ -35,20 +35,20 @@ impl From<&str> for Value {
     }
 }
 
-impl Value {
+impl DBusValue {
     pub fn is_type(&self, typ: DBusType) -> bool {
         match self {
-            Value::Boolean(_) => if let DBusType::Boolean = typ { true } else { false },
-            Value::Byte(_) => if let DBusType::Byte = typ { true } else { false },
-            Value::Int16(_) => if let DBusType::Int16 = typ { true } else { false },
-            Value::Int32(_) => if let DBusType::Int32 = typ { true } else { false },
-            Value::Int64(_) => if let DBusType::Int64 = typ { true } else { false },
-            Value::UInt16(_) => if let DBusType::UInt16 = typ { true } else { false },
-            Value::UInt32(_) => if let DBusType::UInt32 = typ { true } else { false },
-            Value::UInt64(_) => if let DBusType::UInt64 = typ { true } else { false },
-            Value::Double(_) => if let DBusType::Double = typ { true } else { false },
-            Value::String(_) => if let DBusType::String = typ { true } else { false },
-            Value::Vec(_) => match typ {
+            DBusValue::Boolean(_) => if let DBusType::Boolean = typ { true } else { false },
+            DBusValue::Byte(_) => if let DBusType::Byte = typ { true } else { false },
+            DBusValue::Int16(_) => if let DBusType::Int16 = typ { true } else { false },
+            DBusValue::Int32(_) => if let DBusType::Int32 = typ { true } else { false },
+            DBusValue::Int64(_) => if let DBusType::Int64 = typ { true } else { false },
+            DBusValue::UInt16(_) => if let DBusType::UInt16 = typ { true } else { false },
+            DBusValue::UInt32(_) => if let DBusType::UInt32 = typ { true } else { false },
+            DBusValue::UInt64(_) => if let DBusType::UInt64 = typ { true } else { false },
+            DBusValue::Double(_) => if let DBusType::Double = typ { true } else { false },
+            DBusValue::String(_) => if let DBusType::String = typ { true } else { false },
+            DBusValue::Vec(_) => match typ {
                 DBusType::Struct(_) => true,
                 DBusType::Array { value_type: _ } => true,
                 DBusType::Dictionary { key_type: _, value_type: _ } => true,
@@ -58,52 +58,52 @@ impl Value {
     }
 }
 
-fn convert_rule(rule: Pair<Rule>) -> Value {
+fn convert_rule(rule: Pair<Rule>) -> DBusValue {
     match rule.as_rule() {
         Rule::dbus_value => convert_rule(rule.into_inner().next().unwrap()),
-        Rule::array => Value::Vec(
+        Rule::array => DBusValue::Vec(
             rule.into_inner().map(|inner_rule| {
                 convert_rule(inner_rule)
             })
             .collect_vec()
         ),
-        Rule::struct_t => Value::Vec(
+        Rule::struct_t => DBusValue::Vec(
             rule.into_inner().map(|inner_rule| {
                 convert_rule(inner_rule)
             })
             .collect_vec()
         ),
-        Rule::dictionary => Value::Vec(
+        Rule::dictionary => DBusValue::Vec(
             rule.into_inner().map(|inner_rule| {
                 convert_rule(inner_rule)
             })
             .collect_vec()
         ),
-        Rule::BOOLEAN => Value::Boolean(rule.as_str().parse().unwrap()),
-        Rule::BYTE => Value::Byte(u8::from_str_radix(rule.as_str().trim_end_matches("y"), 16).unwrap()),
-        Rule::INT_16 => Value::Int16(rule.as_str().trim_end_matches("n").parse().unwrap()),
-        Rule::INT_32 => Value::Int32(rule.as_str().trim_end_matches("i").parse().unwrap()),
-        Rule::INT_64 => Value::Int64(rule.as_str().trim_end_matches("x").parse().unwrap()),
-        Rule::U_INT_16 => Value::UInt16(rule.as_str().trim_end_matches("q").parse().unwrap()),
-        Rule::U_INT_32 => Value::UInt32(rule.as_str().trim_end_matches("u").parse().unwrap()),
-        Rule::U_INT_64 => Value::UInt64(rule.as_str().trim_end_matches("t").parse().unwrap()),
-        Rule::DOUBLE => Value::Double(rule.as_str().trim_end_matches("d").parse().unwrap()),
-        Rule::STRING => Value::String(rule.as_str().replace("\"", "").to_string()),
+        Rule::BOOLEAN => DBusValue::Boolean(rule.as_str().parse().unwrap()),
+        Rule::BYTE => DBusValue::Byte(u8::from_str_radix(rule.as_str().trim_end_matches("y"), 16).unwrap()),
+        Rule::INT_16 => DBusValue::Int16(rule.as_str().trim_end_matches("n").parse().unwrap()),
+        Rule::INT_32 => DBusValue::Int32(rule.as_str().trim_end_matches("i").parse().unwrap()),
+        Rule::INT_64 => DBusValue::Int64(rule.as_str().trim_end_matches("x").parse().unwrap()),
+        Rule::U_INT_16 => DBusValue::UInt16(rule.as_str().trim_end_matches("q").parse().unwrap()),
+        Rule::U_INT_32 => DBusValue::UInt32(rule.as_str().trim_end_matches("u").parse().unwrap()),
+        Rule::U_INT_64 => DBusValue::UInt64(rule.as_str().trim_end_matches("t").parse().unwrap()),
+        Rule::DOUBLE => DBusValue::Double(rule.as_str().trim_end_matches("d").parse().unwrap()),
+        Rule::STRING => DBusValue::String(rule.as_str().replace("\"", "").to_string()),
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::dbus_value::Value;
+    use crate::dbus_value::DBusValue;
 
     #[test]
     fn test_parse() {
-        let value: Value = "{ \"test\": -8i }".into();
-        assert_eq!(value, Value::Vec(vec![Value::String("test".to_string()), Value::Int32(-8)]));
+        let value: DBusValue = "{ \"test\": -8i }".into();
+        assert_eq!(value, DBusValue::Vec(vec![DBusValue::String("test".to_string()), DBusValue::Int32(-8)]));
 
-        assert_eq!(Into::<Value>::into("-1.9d"), Value::Double(-1.9));
-        assert_eq!(Into::<Value>::into("ffy"), Value::Byte(255u8));
-        assert_eq!(Into::<Value>::into("fey"), Value::Byte(254u8));
+        assert_eq!(Into::<DBusValue>::into("-1.9d"), DBusValue::Double(-1.9));
+        assert_eq!(Into::<DBusValue>::into("ffy"), DBusValue::Byte(255u8));
+        assert_eq!(Into::<DBusValue>::into("fey"), DBusValue::Byte(254u8));
     }
 
 }

@@ -1,14 +1,17 @@
-use std::time::Duration;
+use std::{convert::Infallible, time::Duration};
 
 use clap::{App, Arg, SubCommand, Values};
 use dbus::{
+    arg::messageitem::{MessageItem, MessageItemArray},
     blocking::Connection,
     channel::Channel,
-    Message, arg::messageitem::MessageItem,
+    strings::Signature,
+    Message,
 };
 use dbus_type::DBusType;
-use dbus_value::Value;
-use log::{debug, LevelFilter, warn};
+use dbus_value::DBusValue;
+use itertools::Itertools;
+use log::{debug, warn, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
     attribute::OwnedAttribute,
@@ -16,9 +19,9 @@ use xml::{
     EventReader,
 };
 
+mod argument;
 mod dbus_type;
 mod dbus_value;
-mod argument;
 
 fn main() {
     let app = App::new("Dbus client for Introspection")
@@ -121,45 +124,44 @@ fn main() {
                 cmd.value_of("path").unwrap().into(),
             );
         }
-        ("call", Some(cmd)) => {
-            call(
-                connection,
-                cmd.value_of("bus-name").unwrap().into(),
-                cmd.value_of("path").unwrap().into(),
-                cmd.value_of("interface").unwrap().into(),
-                cmd.value_of("method").unwrap().into(),
-                cmd.value_of("argument")
-            )
-        }
+        ("call", Some(cmd)) => call(
+            connection,
+            cmd.value_of("bus-name").unwrap().into(),
+            cmd.value_of("path").unwrap().into(),
+            cmd.value_of("interface").unwrap().into(),
+            cmd.value_of("method").unwrap().into(),
+            cmd.value_of("argument"),
+        ),
         _ => {
             println!("{}", matches.usage())
         }
     }
 }
 
-trait Signature {
-    fn get_signature() -> String;
+struct DBusArgument<'a> {
+    dbus_type: &'a DBusType,
+    dbus_value: &'a DBusValue,
 }
 
 #[derive(Debug)]
 enum Entry {
-    Node {
-        name: String,
-    },
-    Interface {
-        name: String,
-        methods: Vec<Method>
-    },
-    Signal {
-        name: String,
-    },
+    Node { name: String },
+    Interface { name: String, methods: Vec<Method> },
+    Signal { name: String },
 }
 
 #[derive(Debug)]
-struct Method { name: String, args: Vec<Argument> }
+struct Method {
+    name: String,
+    args: Vec<Argument>,
+}
 
 #[derive(Debug)]
-struct Argument { name: String, typ: String, direction: Option<String> }
+struct Argument {
+    name: String,
+    typ: String,
+    direction: Option<String>,
+}
 
 fn call(
     connection: Connection,
@@ -167,11 +169,11 @@ fn call(
     path: String,
     interface_name: String,
     method_name: String,
-    args: Option<&str>
+    args: Option<&str>,
 ) {
     let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
-    let value: Option<Value> = args.map(|arg| arg.into());
+    let value: Option<DBusValue> = args.map(|arg| arg.into());
 
     // if let Signature::Array(_) = &args {
     //     if let MessageItem::Array(array) = convert(&args) {
@@ -182,7 +184,7 @@ fn call(
     // }
 
     if let Some(val) = value {
-        if let Value::Vec(vec) = val {
+        if let DBusValue::Vec(vec) = val {
             vec.iter().for_each(|_| {
                 // message.append_items(&[convert(&val)])
             });
@@ -207,43 +209,104 @@ fn do_call(
     path: String,
     interface_name: String,
     method_name: String,
-    argument: argument::Argument
+    argument: argument::Argument,
 ) {
     match argument.validate() {
         Ok(arg) => {
             if let DBusType::Struct(args) = *arg.dbus_type {
-                let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
+                let message =
+                    Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
-                args.iter().for_each(|arg| {
-                    message.append_items(&[arg])
-                });
+                // message.append_items(&[arg.into()]);
             } else {
                 println!("Expected outer most argument to be of type struct");
             }
-        },
+        }
         Err(e) => println!("Invalid argument: {:?}", e),
     }
 }
 
-fn convert(arg: &argument::Argument) -> MessageItem {
-    match *arg.dbus_type {
-        DBusType::Boolean => todo!(),
-        DBusType::Byte => todo!(),
-        DBusType::Int16 => todo!(),
-        DBusType::Int32 => todo!(),
-        DBusType::Int64 => todo!(),
-        DBusType::UInt16 => todo!(),
-        DBusType::UInt32 => todo!(),
-        DBusType::UInt64 => todo!(),
-        DBusType::Double => todo!(),
-        DBusType::String => todo!(),
-        DBusType::ObjPath => todo!(),
-        DBusType::Signature => todo!(),
-        DBusType::FileDescriptor => todo!(),
-        DBusType::Struct(_) => todo!(),
-        DBusType::Array { value_type } => todo!(),
-        DBusType::Dictionary { key_type, value_type } => todo!(),
-        DBusType::Variant => todo!(),
+impl DBusArgument<'_> {
+    // pub fn validate(self) -> Infallible {
+    //     self.dbus_type.is_valid_value(&self.dbus_value).map(|_| self)
+    // }
+}
+
+impl<'a> From<DBusArgument<'a>> for MessageItem {
+    fn from(arg: DBusArgument) -> Self {
+        match arg.dbus_type {
+            DBusType::Boolean => todo!(),
+            DBusType::Byte => todo!(),
+            DBusType::Int16 => todo!(),
+            DBusType::Int32 => todo!(),
+            DBusType::Int64 => todo!(),
+            DBusType::UInt16 => todo!(),
+            DBusType::UInt32 => todo!(),
+            DBusType::UInt64 => todo!(),
+            DBusType::Double => todo!(),
+            DBusType::String => todo!(),
+            DBusType::ObjPath => todo!(),
+            DBusType::Signature => todo!(),
+            DBusType::FileDescriptor => todo!(),
+            DBusType::Struct(types) => {
+                if let DBusValue::Vec(values) = arg.dbus_value {
+                    MessageItem::Struct(
+                        types
+                            .iter()
+                            .zip(values.iter())
+                            .map(|pair| {
+                                DBusArgument {
+                                    dbus_type: pair.0,
+                                    dbus_value: pair.1,
+                                }
+                                .into()
+                            })
+                            .collect_vec(),
+                    )
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::Array { value_type } => {
+                if let DBusValue::Vec(values) = arg.dbus_value {
+                    todo!()
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::Dictionary {
+                key_type,
+                value_type,
+            } => todo!(),
+            DBusType::Variant => todo!(),
+        }
+    }
+}
+
+impl From<DBusType> for Signature<'static> {
+    fn from(dbus_type: DBusType) -> Self {
+        match dbus_type {
+            DBusType::Boolean => todo!(),
+            DBusType::Byte => todo!(),
+            DBusType::Int16 => todo!(),
+            DBusType::Int32 => todo!(),
+            DBusType::Int64 => todo!(),
+            DBusType::UInt16 => todo!(),
+            DBusType::UInt32 => todo!(),
+            DBusType::UInt64 => todo!(),
+            DBusType::Double => todo!(),
+            DBusType::String => todo!(),
+            DBusType::ObjPath => todo!(),
+            DBusType::Signature => todo!(),
+            DBusType::FileDescriptor => todo!(),
+            DBusType::Struct(_) => todo!(),
+            DBusType::Array { value_type } => todo!(),
+            DBusType::Dictionary {
+                key_type,
+                value_type,
+            } => todo!(),
+            DBusType::Variant => todo!(),
+        }
     }
 }
 
@@ -310,37 +373,61 @@ fn describe(bus_name: String, object_path: String, connection: Connection) -> Ve
             Ok(elem) => {
                 debug!("{:?}", elem);
                 match elem {
-                    XmlEvent::StartElement { name, attributes, namespace: _ } => {
-                        match name.local_name.as_str() {
-                            "node" => if attributes.get("name").is_some() { 
-                                entries.push(Entry::Node { name: attributes.get("name").unwrap().value.clone() })
-                            },
-                            "interface" => entries.push(Entry::Interface { name: attributes.get("name").unwrap().value.clone(), methods: Vec::new() }),
-                            "signal" => entries.push(Entry::Signal { name: attributes.get("name").unwrap().value.clone() }),
-                            "method" => if let Entry::Interface{ name: _, methods } = entries.last_mut().unwrap() { 
-                                (*methods).push( Method {name: attributes.get("name").unwrap().value.clone(), args: Vec::new() });
-                            } else {},
-                            "arg" => if let Entry::Interface{ name: _, methods } = entries.last_mut().unwrap() { 
+                    XmlEvent::StartElement {
+                        name,
+                        attributes,
+                        namespace: _,
+                    } => match name.local_name.as_str() {
+                        "node" => {
+                            if attributes.get("name").is_some() {
+                                entries.push(Entry::Node {
+                                    name: attributes.get("name").unwrap().value.clone(),
+                                })
+                            }
+                        }
+                        "interface" => entries.push(Entry::Interface {
+                            name: attributes.get("name").unwrap().value.clone(),
+                            methods: Vec::new(),
+                        }),
+                        "signal" => entries.push(Entry::Signal {
+                            name: attributes.get("name").unwrap().value.clone(),
+                        }),
+                        "method" => {
+                            if let Entry::Interface { name: _, methods } =
+                                entries.last_mut().unwrap()
+                            {
+                                (*methods).push(Method {
+                                    name: attributes.get("name").unwrap().value.clone(),
+                                    args: Vec::new(),
+                                });
+                            } else {
+                            }
+                        }
+                        "arg" => {
+                            if let Entry::Interface { name: _, methods } =
+                                entries.last_mut().unwrap()
+                            {
                                 let method = methods.last_mut().unwrap();
-                                
-                                method.args.push( Argument { 
+
+                                method.args.push(Argument {
                                     name: attributes.get("name").unwrap().value.clone(),
                                     typ: attributes.get("type").unwrap().value.clone(),
                                     direction: attributes
                                         .get("direction")
                                         .map(|direction| direction.value.clone()),
-                                 });
-                            } else {}
-                            _ => {}
+                                });
+                            } else {
+                            }
                         }
+                        _ => {}
                     },
                     // XmlEvent::EndElement { name } => todo!(),
                     _ => {}
                 }
-            },
+            }
             Err(err) => warn!("Xml error: {:?}", err),
         }
-    };
+    }
 
     entries
 }

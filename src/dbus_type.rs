@@ -5,7 +5,7 @@ use itertools::Itertools;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
-use crate::{argument::DBusError, dbus_value::Value};
+use crate::{argument::DBusError, dbus_value::DBusValue};
 
 #[derive(Debug, PartialEq)]
 pub enum DBusType {
@@ -34,10 +34,10 @@ pub enum DBusType {
 }
 
 impl DBusType {
-    pub fn is_valid_value(&self, val: &Value) -> Result<(), DBusError> {
+    pub fn is_valid_value(&self, val: &DBusValue) -> Result<(), DBusError> {
         match self {
             DBusType::Boolean => {
-                if let Value::Boolean(_) = val {
+                if let DBusValue::Boolean(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -47,7 +47,7 @@ impl DBusType {
                 }
             }
             DBusType::Byte => {
-                if let Value::Byte(_) = val {
+                if let DBusValue::Byte(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -57,7 +57,7 @@ impl DBusType {
                 }
             }
             DBusType::Int16 => {
-                if let Value::Int16(_) = val {
+                if let DBusValue::Int16(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -67,7 +67,7 @@ impl DBusType {
                 }
             }
             DBusType::Int32 => {
-                if let Value::Int32(_) = val {
+                if let DBusValue::Int32(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -77,7 +77,7 @@ impl DBusType {
                 }
             }
             DBusType::Int64 => {
-                if let Value::Int64(_) = val {
+                if let DBusValue::Int64(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -87,7 +87,7 @@ impl DBusType {
                 }
             }
             DBusType::UInt16 => {
-                if let Value::UInt16(_) = val {
+                if let DBusValue::UInt16(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -97,7 +97,7 @@ impl DBusType {
                 }
             }
             DBusType::UInt32 => {
-                if let Value::UInt32(_) = val {
+                if let DBusValue::UInt32(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -107,7 +107,7 @@ impl DBusType {
                 }
             }
             DBusType::UInt64 => {
-                if let Value::UInt64(_) = val {
+                if let DBusValue::UInt64(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -117,7 +117,7 @@ impl DBusType {
                 }
             }
             DBusType::Double => {
-                if let Value::Double(_) = val {
+                if let DBusValue::Double(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -127,7 +127,7 @@ impl DBusType {
                 }
             }
             DBusType::String => {
-                if let Value::String(_) = val {
+                if let DBusValue::String(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -137,7 +137,7 @@ impl DBusType {
                 }
             }
             DBusType::ObjPath => {
-                if let Value::String(_) = val {
+                if let DBusValue::String(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -147,7 +147,7 @@ impl DBusType {
                 }
             }
             DBusType::Signature => {
-                if let Value::String(_) = val {
+                if let DBusValue::String(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -157,7 +157,7 @@ impl DBusType {
                 }
             }
             DBusType::FileDescriptor => {
-                if let Value::UInt32(_) = val {
+                if let DBusValue::UInt32(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -167,7 +167,7 @@ impl DBusType {
                 }
             }
             DBusType::Struct(_) => {
-                if let Value::Vec(_) = val {
+                if let DBusValue::Vec(_) = val {
                     Ok(())
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -177,7 +177,7 @@ impl DBusType {
                 }
             }
             DBusType::Array { value_type: _ } => {
-                if let Value::Vec(_vec) = val {
+                if let DBusValue::Vec(_vec) = val {
                     todo!("Check that all values have the same type")
                 } else {
                     Err(DBusError::InvalidValue(format!(
@@ -190,7 +190,7 @@ impl DBusType {
                 key_type,
                 value_type,
             } => {
-                if let Value::Vec(vec) = val {
+                if let DBusValue::Vec(vec) = val {
                     vec.iter()
                         .step_by(2)
                         .map(|inner_val| key_type.is_valid_value(inner_val))
