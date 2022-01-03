@@ -4,7 +4,7 @@ use clap::{App, Arg, SubCommand, Values};
 use dbus::{
     blocking::Connection,
     channel::Channel,
-    Message,
+    Message, arg::messageitem::MessageItem,
 };
 use dbus_type::DBusType;
 use dbus_value::Value;
@@ -211,7 +211,7 @@ fn do_call(
 ) {
     match argument.validate() {
         Ok(arg) => {
-            if let DBusType::Struct(args) {
+            if let DBusType::Struct(args) = *arg.dbus_type {
                 let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
                 args.iter().for_each(|arg| {
@@ -226,7 +226,24 @@ fn do_call(
 }
 
 fn convert(arg: &argument::Argument) -> MessageItem {
-    match arg.dbus_type {
+    match *arg.dbus_type {
+        DBusType::Boolean => todo!(),
+        DBusType::Byte => todo!(),
+        DBusType::Int16 => todo!(),
+        DBusType::Int32 => todo!(),
+        DBusType::Int64 => todo!(),
+        DBusType::UInt16 => todo!(),
+        DBusType::UInt32 => todo!(),
+        DBusType::UInt64 => todo!(),
+        DBusType::Double => todo!(),
+        DBusType::String => todo!(),
+        DBusType::ObjPath => todo!(),
+        DBusType::Signature => todo!(),
+        DBusType::FileDescriptor => todo!(),
+        DBusType::Struct(_) => todo!(),
+        DBusType::Array { value_type } => todo!(),
+        DBusType::Dictionary { key_type, value_type } => todo!(),
+        DBusType::Variant => todo!(),
     }
 }
 
