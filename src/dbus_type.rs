@@ -5,7 +5,7 @@ use itertools::Itertools;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
-use crate::{argument::DBusError, dbus_value::DBusValue};
+use crate::{dbus_value::DBusValue, DBusError};
 
 #[derive(Debug, PartialEq)]
 pub enum DBusType {

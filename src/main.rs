@@ -2,7 +2,7 @@ use std::{convert::Infallible, time::Duration};
 
 use clap::{App, Arg, SubCommand, Values};
 use dbus::{
-    arg::messageitem::{MessageItem, MessageItemArray},
+    arg::messageitem::{MessageItem, MessageItemArray, MessageItemDict},
     blocking::Connection,
     channel::Channel,
     strings::Signature,
@@ -19,7 +19,6 @@ use xml::{
     EventReader,
 };
 
-mod argument;
 mod dbus_type;
 mod dbus_value;
 
@@ -119,15 +118,15 @@ fn main() {
         }
         ("introspect", Some(cmd)) => {
             introspect(
-                connection,
-                cmd.value_of("bus-name").unwrap().into(),
-                cmd.value_of("path").unwrap().into(),
+                &connection,
+                &cmd.value_of("bus-name").unwrap().into(),
+                &cmd.value_of("path").unwrap().into(),
             );
         }
         ("call", Some(cmd)) => call(
-            connection,
-            cmd.value_of("bus-name").unwrap().into(),
-            cmd.value_of("path").unwrap().into(),
+            &connection,
+            &cmd.value_of("bus-name").unwrap().into(),
+            &cmd.value_of("path").unwrap().into(),
             cmd.value_of("interface").unwrap().into(),
             cmd.value_of("method").unwrap().into(),
             cmd.value_of("argument"),
@@ -141,6 +140,12 @@ fn main() {
 struct DBusArgument<'a> {
     dbus_type: &'a DBusType,
     dbus_value: &'a DBusValue,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum DBusError {
+    InvalidSignature,
+    InvalidValue(String),
 }
 
 #[derive(Debug)]
@@ -164,34 +169,80 @@ struct Argument {
 }
 
 fn call(
-    connection: Connection,
-    bus_name: String,
-    path: String,
+    connection: &Connection,
+    bus_name: &String,
+    path: &String,
     interface_name: String,
     method_name: String,
     args: Option<&str>,
 ) {
-    let message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
+    let entries = describe(bus_name, path, connection);
 
-    let value: Option<DBusValue> = args.map(|arg| arg.into());
+    let interface = entries.iter().find(|entry| {
+        if let Entry::Interface { name, methods: _ } = entry {
+            name.eq(&interface_name)
+        } else {
+            false
+        }
+    });
 
-    // if let Signature::Array(_) = &args {
-    //     if let MessageItem::Array(array) = convert(&args) {
-    //         array.into_vec().into_iter().for_each(|arg| {
-    //             message.append_items(&[arg]);
-    //         });
-    //     }
-    // }
+    println!("Found interface: {:?}\n", interface);
 
-    if let Some(val) = value {
-        if let DBusValue::Vec(vec) = val {
-            vec.iter().for_each(|_| {
-                // message.append_items(&[convert(&val)])
-            });
+    if let Some(interface) = interface {
+        if let Entry::Interface { name: _, methods } = interface {
+            let method = methods
+                .iter()
+                .find(|method| method.name.as_str() == method_name.as_str());
+
+            if let Some(method) = method {
+                let signature: DBusType = method
+                    .args
+                    .iter()
+                    .filter(|arg| arg.direction.eq(&Some("in".into())))
+                    .map(|arg| arg.typ.clone())
+                    .join("")
+                    .as_str()
+                    .into();
+
+                let value: Option<DBusValue> = args.map(|args| args.into());
+
+                println!("Found method: {:?}\n", method);
+                println!("Signature: {:?}\n", Into::<String>::into(&signature));
+
+                do_call(
+                    connection,
+                    bus_name,
+                    path,
+                    interface_name,
+                    method_name,
+                    value.as_ref().map(|value| DBusArgument {
+                        dbus_type: &signature,
+                        dbus_value: value,
+                    }),
+                );
+            }
         }
     }
+}
 
-    // args.into_iter().map(|arg| ArgType::);
+fn do_call(
+    connection: &Connection,
+    bus_name: &String,
+    path: &String,
+    interface_name: String,
+    method_name: String,
+    args: Option<DBusArgument>,
+) {
+    let mut message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
+
+    if let Some(args) = args {
+        match args.validate() {
+            Ok(arg) => {
+                message.append_items(&[arg.into()]);
+            }
+            Err(e) => println!("Invalid argument: {:?}", e),
+        }
+    }
 
     let response = connection
         .channel()
@@ -203,51 +254,108 @@ fn call(
     println!("{}", error.message().unwrap());
 }
 
-fn do_call(
-    connection: Connection,
-    bus_name: String,
-    path: String,
-    interface_name: String,
-    method_name: String,
-    argument: argument::Argument,
-) {
-    match argument.validate() {
-        Ok(arg) => {
-            if let DBusType::Struct(args) = *arg.dbus_type {
-                let message =
-                    Message::call_with_args(bus_name, path, interface_name, method_name, ());
-
-                // message.append_items(&[arg.into()]);
-            } else {
-                println!("Expected outer most argument to be of type struct");
-            }
-        }
-        Err(e) => println!("Invalid argument: {:?}", e),
+impl<'a> DBusArgument<'a> {
+    pub fn validate(self) -> Result<DBusArgument<'a>, DBusError> {
+        self.dbus_type
+            .is_valid_value(&self.dbus_value)
+            .map(|_| self)
     }
-}
-
-impl DBusArgument<'_> {
-    // pub fn validate(self) -> Infallible {
-    //     self.dbus_type.is_valid_value(&self.dbus_value).map(|_| self)
-    // }
 }
 
 impl<'a> From<DBusArgument<'a>> for MessageItem {
     fn from(arg: DBusArgument) -> Self {
         match arg.dbus_type {
-            DBusType::Boolean => todo!(),
-            DBusType::Byte => todo!(),
-            DBusType::Int16 => todo!(),
-            DBusType::Int32 => todo!(),
-            DBusType::Int64 => todo!(),
-            DBusType::UInt16 => todo!(),
-            DBusType::UInt32 => todo!(),
-            DBusType::UInt64 => todo!(),
-            DBusType::Double => todo!(),
-            DBusType::String => todo!(),
-            DBusType::ObjPath => todo!(),
-            DBusType::Signature => todo!(),
-            DBusType::FileDescriptor => todo!(),
+            DBusType::Boolean => {
+                if let DBusValue::Boolean(value) = arg.dbus_value {
+                    MessageItem::Bool(*value)
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::Byte => {
+                if let DBusValue::Byte(value) = arg.dbus_value {
+                    MessageItem::Byte(*value)
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::Int16 => {
+                if let DBusValue::Int16(value) = arg.dbus_value {
+                    MessageItem::Int16(*value)
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::Int32 => {
+                if let DBusValue::Int32(value) = arg.dbus_value {
+                    MessageItem::Int32(*value)
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::Int64 => {
+                if let DBusValue::Int64(value) = arg.dbus_value {
+                    MessageItem::Int64(*value)
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::UInt16 => {
+                if let DBusValue::UInt16(value) = arg.dbus_value {
+                    MessageItem::UInt16(*value)
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::UInt32 => {
+                if let DBusValue::UInt32(value) = arg.dbus_value {
+                    MessageItem::UInt32(*value)
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::UInt64 => {
+                if let DBusValue::UInt64(value) = arg.dbus_value {
+                    MessageItem::UInt64(*value)
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::Double => {
+                if let DBusValue::Double(value) = arg.dbus_value {
+                    MessageItem::Double(*value)
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::String => {
+                if let DBusValue::String(value) = arg.dbus_value {
+                    MessageItem::Str(value.clone())
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::ObjPath => {
+                if let DBusValue::String(value) = arg.dbus_value {
+                    MessageItem::ObjectPath(value.clone().into())
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::Signature => {
+                if let DBusValue::String(value) = arg.dbus_value {
+                    MessageItem::Signature(value.clone().into())
+                } else {
+                    panic!()
+                }
+            }
+            DBusType::FileDescriptor => {
+                if let DBusValue::String(_) = arg.dbus_value {
+                    todo!()
+                } else {
+                    panic!()
+                }
+            }
             DBusType::Struct(types) => {
                 if let DBusValue::Vec(values) = arg.dbus_value {
                     MessageItem::Struct(
@@ -269,7 +377,22 @@ impl<'a> From<DBusArgument<'a>> for MessageItem {
             }
             DBusType::Array { value_type } => {
                 if let DBusValue::Vec(values) = arg.dbus_value {
-                    todo!()
+                    MessageItem::Array(
+                        MessageItemArray::new(
+                            values
+                                .iter()
+                                .map(|value| {
+                                    DBusArgument {
+                                        dbus_type: value_type,
+                                        dbus_value: value,
+                                    }
+                                    .into()
+                                })
+                                .collect_vec(),
+                            Into::<String>::into(value_type.as_ref()).into(),
+                        )
+                        .unwrap(),
+                    )
                 } else {
                     panic!()
                 }
@@ -277,34 +400,38 @@ impl<'a> From<DBusArgument<'a>> for MessageItem {
             DBusType::Dictionary {
                 key_type,
                 value_type,
-            } => todo!(),
-            DBusType::Variant => todo!(),
-        }
-    }
-}
-
-impl From<DBusType> for Signature<'static> {
-    fn from(dbus_type: DBusType) -> Self {
-        match dbus_type {
-            DBusType::Boolean => todo!(),
-            DBusType::Byte => todo!(),
-            DBusType::Int16 => todo!(),
-            DBusType::Int32 => todo!(),
-            DBusType::Int64 => todo!(),
-            DBusType::UInt16 => todo!(),
-            DBusType::UInt32 => todo!(),
-            DBusType::UInt64 => todo!(),
-            DBusType::Double => todo!(),
-            DBusType::String => todo!(),
-            DBusType::ObjPath => todo!(),
-            DBusType::Signature => todo!(),
-            DBusType::FileDescriptor => todo!(),
-            DBusType::Struct(_) => todo!(),
-            DBusType::Array { value_type } => todo!(),
-            DBusType::Dictionary {
-                key_type,
-                value_type,
-            } => todo!(),
+            } => {
+                if let DBusValue::Vec(values) = arg.dbus_value {
+                    MessageItem::Dict(
+                        MessageItemDict::new(
+                            values
+                                .iter()
+                                .step_by(2)
+                                .zip(values.iter().skip(1).step_by(2))
+                                .map(|entry| {
+                                    (
+                                        DBusArgument {
+                                            dbus_type: key_type,
+                                            dbus_value: entry.0,
+                                        }
+                                        .into(),
+                                        DBusArgument {
+                                            dbus_type: value_type,
+                                            dbus_value: entry.1,
+                                        }
+                                        .into(),
+                                    )
+                                })
+                                .collect_vec(),
+                            Into::<String>::into(key_type.as_ref()).into(),
+                            Into::<String>::into(value_type.as_ref()).into(),
+                        )
+                        .unwrap(),
+                    )
+                } else {
+                    panic!()
+                }
+            }
             DBusType::Variant => todo!(),
         }
     }
@@ -320,7 +447,7 @@ fn list_names(connection: Connection) {
     names.iter().for_each(|name| println!("    {}", name));
 }
 
-fn introspect(connection: Connection, bus_name: String, path: String) {
+fn introspect(connection: &Connection, bus_name: &String, path: &String) {
     // let (nodes, interfaces) = do_introspect(connection, bus_name, path);
 
     let entries = describe(bus_name, path, connection);
@@ -348,14 +475,11 @@ fn build_connection(address: &str) -> Connection {
     }
 }
 
-fn describe(bus_name: String, object_path: String, connection: Connection) -> Vec<Entry> {
+fn describe(bus_name: &String, object_path: &String, connection: &Connection) -> Vec<Entry> {
+    
     let proxy = connection.with_proxy(
         bus_name,
-        if object_path.starts_with("/") {
-            object_path
-        } else {
-            format!("/{}", object_path)
-        },
+        object_path,
         Duration::from_secs(1),
     );
 
@@ -410,7 +534,10 @@ fn describe(bus_name: String, object_path: String, connection: Connection) -> Ve
                                 let method = methods.last_mut().unwrap();
 
                                 method.args.push(Argument {
-                                    name: attributes.get("name").unwrap().value.clone(),
+                                    name: attributes
+                                        .get("name")
+                                        .map(|attribute| attribute.value.clone())
+                                        .unwrap_or("".into()),
                                     typ: attributes.get("type").unwrap().value.clone(),
                                     direction: attributes
                                         .get("direction")
