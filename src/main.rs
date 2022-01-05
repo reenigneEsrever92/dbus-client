@@ -1,4 +1,4 @@
-use std::{convert::Infallible, time::Duration};
+use std::{convert::Infallible, time::Duration, ops::Not};
 
 use clap::{App, Arg, SubCommand, Values};
 use dbus::{
@@ -19,8 +19,12 @@ use xml::{
     EventReader,
 };
 
+use crate::dbus_argument::DBusArgument;
+
 mod dbus_type;
 mod dbus_value;
+mod dbus_argument;
+mod dbus_error;
 
 fn main() {
     let app = App::new("Dbus client for Introspection")
@@ -137,17 +141,6 @@ fn main() {
     }
 }
 
-struct DBusArgument<'a> {
-    dbus_type: &'a DBusType,
-    dbus_value: &'a DBusValue,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum DBusError {
-    InvalidSignature,
-    InvalidValue(String),
-}
-
 #[derive(Debug)]
 enum Entry {
     Node { name: String },
@@ -195,16 +188,15 @@ fn call(
                 .find(|method| method.name.as_str() == method_name.as_str());
 
             if let Some(method) = method {
-                let signature: DBusType = method
+                let signature = method
                     .args
                     .iter()
                     .filter(|arg| arg.direction.eq(&Some("in".into())))
                     .map(|arg| arg.typ.clone())
-                    .join("")
-                    .as_str()
-                    .into();
-
-                let value: Option<DBusValue> = args.map(|args| args.into());
+                    .join("");
+                    
+                let dbus_type: DBusType = signature.as_str().into();
+                let dbus_value: Option<DBusValue> = args.map(|args| args.into());
 
                 println!("Found method: {:?}\n", method);
                 println!("Signature: {:?}\n", Into::<String>::into(&signature));
@@ -215,8 +207,8 @@ fn call(
                     path,
                     interface_name,
                     method_name,
-                    value.as_ref().map(|value| DBusArgument {
-                        dbus_type: &signature,
+                    dbus_value.as_ref().map(|value| DBusArgument {
+                        dbus_type: &dbus_type,
                         dbus_value: value,
                     }),
                 );
@@ -254,188 +246,7 @@ fn do_call(
     println!("{}", error.message().unwrap());
 }
 
-impl<'a> DBusArgument<'a> {
-    pub fn validate(self) -> Result<DBusArgument<'a>, DBusError> {
-        self.dbus_type
-            .is_valid_value(&self.dbus_value)
-            .map(|_| self)
-    }
-}
 
-impl<'a> From<DBusArgument<'a>> for MessageItem {
-    fn from(arg: DBusArgument) -> Self {
-        match arg.dbus_type {
-            DBusType::Boolean => {
-                if let DBusValue::Boolean(value) = arg.dbus_value {
-                    MessageItem::Bool(*value)
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Byte => {
-                if let DBusValue::Byte(value) = arg.dbus_value {
-                    MessageItem::Byte(*value)
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Int16 => {
-                if let DBusValue::Int16(value) = arg.dbus_value {
-                    MessageItem::Int16(*value)
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Int32 => {
-                if let DBusValue::Int32(value) = arg.dbus_value {
-                    MessageItem::Int32(*value)
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Int64 => {
-                if let DBusValue::Int64(value) = arg.dbus_value {
-                    MessageItem::Int64(*value)
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::UInt16 => {
-                if let DBusValue::UInt16(value) = arg.dbus_value {
-                    MessageItem::UInt16(*value)
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::UInt32 => {
-                if let DBusValue::UInt32(value) = arg.dbus_value {
-                    MessageItem::UInt32(*value)
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::UInt64 => {
-                if let DBusValue::UInt64(value) = arg.dbus_value {
-                    MessageItem::UInt64(*value)
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Double => {
-                if let DBusValue::Double(value) = arg.dbus_value {
-                    MessageItem::Double(*value)
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::String => {
-                if let DBusValue::String(value) = arg.dbus_value {
-                    MessageItem::Str(value.clone())
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::ObjPath => {
-                if let DBusValue::String(value) = arg.dbus_value {
-                    MessageItem::ObjectPath(value.clone().into())
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Signature => {
-                if let DBusValue::String(value) = arg.dbus_value {
-                    MessageItem::Signature(value.clone().into())
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::FileDescriptor => {
-                if let DBusValue::String(_) = arg.dbus_value {
-                    todo!()
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Struct(types) => {
-                if let DBusValue::Vec(values) = arg.dbus_value {
-                    MessageItem::Struct(
-                        types
-                            .iter()
-                            .zip(values.iter())
-                            .map(|pair| {
-                                DBusArgument {
-                                    dbus_type: pair.0,
-                                    dbus_value: pair.1,
-                                }
-                                .into()
-                            })
-                            .collect_vec(),
-                    )
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Array { value_type } => {
-                if let DBusValue::Vec(values) = arg.dbus_value {
-                    MessageItem::Array(
-                        MessageItemArray::new(
-                            values
-                                .iter()
-                                .map(|value| {
-                                    DBusArgument {
-                                        dbus_type: value_type,
-                                        dbus_value: value,
-                                    }
-                                    .into()
-                                })
-                                .collect_vec(),
-                            Into::<String>::into(value_type.as_ref()).into(),
-                        )
-                        .unwrap(),
-                    )
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Dictionary {
-                key_type,
-                value_type,
-            } => {
-                if let DBusValue::Vec(values) = arg.dbus_value {
-                    MessageItem::Dict(
-                        MessageItemDict::new(
-                            values
-                                .iter()
-                                .step_by(2)
-                                .zip(values.iter().skip(1).step_by(2))
-                                .map(|entry| {
-                                    (
-                                        DBusArgument {
-                                            dbus_type: key_type,
-                                            dbus_value: entry.0,
-                                        }
-                                        .into(),
-                                        DBusArgument {
-                                            dbus_type: value_type,
-                                            dbus_value: entry.1,
-                                        }
-                                        .into(),
-                                    )
-                                })
-                                .collect_vec(),
-                            Into::<String>::into(key_type.as_ref()).into(),
-                            Into::<String>::into(value_type.as_ref()).into(),
-                        )
-                        .unwrap(),
-                    )
-                } else {
-                    panic!()
-                }
-            }
-            DBusType::Variant => todo!(),
-        }
-    }
-}
 
 fn list_names(connection: Connection) {
     let proxy = connection.with_proxy("org.freedesktop.DBus", "/", Duration::from_secs(1));
@@ -460,7 +271,30 @@ fn introspect(connection: &Connection, bus_name: &String, path: &String) {
 
     println!("\ninterfaces:\n");
     entries.iter().for_each(|entry| match entry {
-        Entry::Interface { name, methods: _ } => print(1, name),
+        Entry::Interface { name, methods } => {
+            print(1, name);
+            methods.iter().for_each(|method| {
+                print(
+                    2,
+                    &format!(
+                        "{} ( {} ) -> {}",
+                        &method.name,
+                        method
+                            .args
+                            .iter()
+                            .filter(|arg| arg.direction.eq(&Some("in".into())))
+                            .map(|arg| arg.typ.clone())
+                            .join(""),
+                        method
+                            .args
+                            .iter()
+                            .filter(|arg| arg.direction.eq(&Some("out".into())))
+                            .map(|arg| arg.typ.clone())
+                            .join("")
+                    ),
+                );
+            })
+        }
         _ => {}
     });
 }
@@ -476,12 +310,7 @@ fn build_connection(address: &str) -> Connection {
 }
 
 fn describe(bus_name: &String, object_path: &String, connection: &Connection) -> Vec<Entry> {
-    
-    let proxy = connection.with_proxy(
-        bus_name,
-        object_path,
-        Duration::from_secs(1),
-    );
+    let proxy = connection.with_proxy(bus_name, object_path, Duration::from_secs(1));
 
     let (capas,): (String,) = proxy
         .method_call("org.freedesktop.DBus.Introspectable", "Introspect", ())
