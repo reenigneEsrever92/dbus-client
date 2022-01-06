@@ -15,4 +15,4 @@ U_INT_16 = { ASCII_DIGIT+ ~ "q" }
 U_INT_32 = { ASCII_DIGIT+ ~ "u" }
 U_INT_64 = { ASCII_DIGIT+ ~ "t" }
 DOUBLE = { "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? ~ "d" }
-STRING = { "\"" ~ (LETTER | SPACE_SEPARATOR | NUMBER | "-" | "." | "_" | "\\\"")* ~ "\"" }  
+STRING = { "\""? ~ (LETTER | SPACE_SEPARATOR | NUMBER | "-" | "." | "_" | "\\\"" | "@")+ ~ "\""? }

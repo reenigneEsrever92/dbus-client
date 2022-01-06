@@ -1,4 +1,4 @@
-use std::{convert::Infallible, time::Duration, ops::Not};
+use std::{convert::Infallible, ops::Not, time::Duration};
 
 use clap::{App, Arg, SubCommand, Values};
 use dbus::{
@@ -21,10 +21,10 @@ use xml::{
 
 use crate::dbus_argument::DBusArgument;
 
-mod dbus_type;
-mod dbus_value;
 mod dbus_argument;
 mod dbus_error;
+mod dbus_type;
+mod dbus_value;
 
 fn main() {
     let app = App::new("Dbus client for Introspection")
@@ -133,7 +133,7 @@ fn main() {
             &cmd.value_of("path").unwrap().into(),
             cmd.value_of("interface").unwrap().into(),
             cmd.value_of("method").unwrap().into(),
-            cmd.value_of("argument"),
+            cmd.value_of("argument").unwrap_or(""),
         ),
         _ => {
             println!("{}", matches.usage())
@@ -167,7 +167,7 @@ fn call(
     path: &String,
     interface_name: String,
     method_name: String,
-    args: Option<&str>,
+    args: &str,
 ) {
     let entries = describe(bus_name, path, connection);
 
@@ -194,9 +194,9 @@ fn call(
                     .filter(|arg| arg.direction.eq(&Some("in".into())))
                     .map(|arg| arg.typ.clone())
                     .join("");
-                    
+
                 let dbus_type: DBusType = signature.as_str().into();
-                let dbus_value: Option<DBusValue> = args.map(|args| args.into());
+                let dbus_value: DBusValue = args.into();
 
                 println!("Found method: {:?}\n", method);
                 println!("Signature: {:?}\n", Into::<String>::into(&signature));
@@ -207,10 +207,10 @@ fn call(
                     path,
                     interface_name,
                     method_name,
-                    dbus_value.as_ref().map(|value| DBusArgument {
+                    DBusArgument {
                         dbus_type: &dbus_type,
-                        dbus_value: value,
-                    }),
+                        dbus_value: &dbus_value,
+                    },
                 );
             }
         }
@@ -223,30 +223,33 @@ fn do_call(
     path: &String,
     interface_name: String,
     method_name: String,
-    args: Option<DBusArgument>,
+    args: DBusArgument,
 ) {
     let mut message = Message::call_with_args(bus_name, path, interface_name, method_name, ());
 
-    if let Some(args) = args {
-        match args.validate() {
-            Ok(arg) => {
-                message.append_items(&[arg.into()]);
+    match args.validate() {
+        Ok(args) => {
+            if let DBusType::Struct(vec) = args.dbus_type {
+                if let Some(message_item) = args.into() {
+                    if let MessageItem::Struct(vec) = message_item {
+                        vec.into_iter().for_each(|arg| {
+                            message.append_items(&[arg]);
+                        });
+                    } else {
+                        panic!("Top level argument has to be a struct")
+                    }
+                }
             }
-            Err(e) => println!("Invalid argument: {:?}", e),
         }
+        Err(e) => println!("Invalid argument: {:?}", e),
     }
 
     let response = connection
         .channel()
         .send_with_reply_and_block(message, Duration::from_secs(1));
 
-    let error = response.err().unwrap();
-
-    println!("{}", error.name().unwrap());
-    println!("{}", error.message().unwrap());
+    print!("{:?}", response.unwrap())
 }
-
-
 
 fn list_names(connection: Connection) {
     let proxy = connection.with_proxy("org.freedesktop.DBus", "/", Duration::from_secs(1));

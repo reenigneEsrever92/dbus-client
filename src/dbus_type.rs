@@ -5,7 +5,7 @@ use itertools::Itertools;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
-use crate::{dbus_value::DBusValue, dbus_error::DBusError};
+use crate::{dbus_error::DBusError, dbus_value::DBusValue};
 
 #[derive(Debug, PartialEq)]
 pub enum DBusType {
@@ -22,6 +22,7 @@ pub enum DBusType {
     ObjPath,
     Signature,
     FileDescriptor,
+    Unit,
     Struct(Vec<DBusType>),
     Array {
         value_type: Box<DBusType>,
@@ -195,7 +196,9 @@ impl DBusType {
                         .step_by(2)
                         .map(|inner_val| key_type.is_valid_value(inner_val))
                         .find(|inner_val| *inner_val != Ok(()))
-                        .map_or(Ok(()), |error| Err(DBusError::InvalidValue(format!("Wrong dictionary key"))))
+                        .map_or(Ok(()), |error| {
+                            Err(DBusError::InvalidValue(format!("Wrong dictionary key")))
+                        })
                 } else {
                     Err(DBusError::InvalidValue(format!(
                         "Expected vec got: {:?}",
@@ -204,6 +207,7 @@ impl DBusType {
                 }
             }
             DBusType::Variant => Ok(()),
+            DBusType::Unit => Ok(()),
         }
     }
 }
@@ -252,18 +256,23 @@ impl From<&DBusType> for String {
                     Into::<String>::into(value_type.deref())
                 )
             }
+            DBusType::Unit => "".into(),
         }
     }
 }
 
 impl From<&str> for DBusType {
     fn from(str: &str) -> DBusType {
-        let ast = DBusTypeParser::parse(Rule::dbus_type, str)
-            .expect("Invalid Signature")
-            .next()
-            .unwrap();
+        if str.is_empty() {
+            DBusType::Unit
+        } else {
+            let ast = DBusTypeParser::parse(Rule::dbus_type, str)
+                .expect("Invalid Signature")
+                .next()
+                .unwrap();
 
-        convert_rule(ast.into_inner().next().unwrap())
+            convert_rule(ast.into_inner().next().unwrap())
+        }
     }
 }
 
