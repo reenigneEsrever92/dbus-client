@@ -5,41 +5,24 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "lldb",
+            "name": "(gdb) Launch",
+            "type": "cppdbg",
             "request": "launch",
-            "name": "Debug executable 'dbus-client'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=dbus-client",
-                    "--package=dbus-client"
-                ],
-                "filter": {
-                    "name": "dbus-client",
-                    "kind": "bin"
+            "program": "${workspaceRoot}/target/debug/dbus-client",
+            "args": ["c", "org.gnome.Shell", "/org/gnome/Shell", "org.gnome.Shell.Extensions", "GetExtensionInfo", "(window-list@gnome-shell-extensions.gcampax.github.com)"],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
                 }
-            },
-            "args": ["c", "org.gnome.Shell", "/org/gnome/Shell/Screenshot", "org.freedesktop.DBus.Introspectable", "Introspect"],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'dbus-client'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=dbus-client",
-                    "--package=dbus-client"
-                ],
-                "filter": {
-                    "name": "dbus-client",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+            ]
         }
     ]
 }

@@ -23,84 +23,84 @@ impl<'a> From<DBusArgument<'a>> for Option<MessageItem> {
                 if let DBusValue::Boolean(value) = arg.dbus_value {
                     Some(MessageItem::Bool(*value))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type Boolean got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::Byte => {
                 if let DBusValue::Byte(value) = arg.dbus_value {
                     Some(MessageItem::Byte(*value))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type Byte got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::Int16 => {
                 if let DBusValue::Int16(value) = arg.dbus_value {
                     Some(MessageItem::Int16(*value))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type Int16 got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::Int32 => {
                 if let DBusValue::Int32(value) = arg.dbus_value {
                     Some(MessageItem::Int32(*value))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type Int32 got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::Int64 => {
                 if let DBusValue::Int64(value) = arg.dbus_value {
                     Some(MessageItem::Int64(*value))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type Int64 got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::UInt16 => {
                 if let DBusValue::UInt16(value) = arg.dbus_value {
                     Some(MessageItem::UInt16(*value))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type UInt16 got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::UInt32 => {
                 if let DBusValue::UInt32(value) = arg.dbus_value {
                     Some(MessageItem::UInt32(*value))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type UInt32 got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::UInt64 => {
                 if let DBusValue::UInt64(value) = arg.dbus_value {
                     Some(MessageItem::UInt64(*value))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type UInt64 got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::Double => {
                 if let DBusValue::Double(value) = arg.dbus_value {
                     Some(MessageItem::Double(*value))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type Double got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::String => {
                 if let DBusValue::String(value) = arg.dbus_value {
                     Some(MessageItem::Str(value.clone()))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type String got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::ObjPath => {
                 if let DBusValue::String(value) = arg.dbus_value {
                     Some(MessageItem::ObjectPath(value.clone().into()))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type String got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::Signature => {
                 if let DBusValue::String(value) = arg.dbus_value {
                     Some(MessageItem::Signature(value.clone().into()))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type String got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::FileDescriptor => {
@@ -126,7 +126,7 @@ impl<'a> From<DBusArgument<'a>> for Option<MessageItem> {
                             .collect_vec(),
                     ))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type String got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::Array { value_type } => {
@@ -148,7 +148,7 @@ impl<'a> From<DBusArgument<'a>> for Option<MessageItem> {
                         .unwrap(),
                     ))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type String got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::Dictionary {
@@ -183,7 +183,7 @@ impl<'a> From<DBusArgument<'a>> for Option<MessageItem> {
                         .unwrap(),
                     ))
                 } else {
-                    panic!()
+                    panic!("Expected argument of type String got: {:?}", arg.dbus_value)
                 }
             }
             DBusType::Variant => todo!(),

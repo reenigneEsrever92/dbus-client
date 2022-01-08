@@ -11,7 +11,7 @@ use dbus::{
 use dbus_type::DBusType;
 use dbus_value::DBusValue;
 use itertools::Itertools;
-use log::{debug, warn, LevelFilter};
+use log::{debug, warn, info, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
     attribute::OwnedAttribute,
@@ -179,7 +179,7 @@ fn call(
         }
     });
 
-    println!("Found interface: {:?}\n", interface);
+    debug!("Found interface: {:?}\n", interface);
 
     if let Some(interface) = interface {
         if let Entry::Interface { name: _, methods } = interface {
@@ -188,18 +188,22 @@ fn call(
                 .find(|method| method.name.as_str() == method_name.as_str());
 
             if let Some(method) = method {
-                let signature = method
-                    .args
-                    .iter()
-                    .filter(|arg| arg.direction.eq(&Some("in".into())))
-                    .map(|arg| arg.typ.clone())
-                    .join("");
+                debug!("Found method: {:?}\n", method);
+
+                let signature = format!(
+                    "({})",
+                    method
+                        .args
+                        .iter()
+                        .filter(|arg| arg.direction.eq(&Some("in".into())))
+                        .map(|arg| arg.typ.clone())
+                        .join("")
+                );
+
+                debug!("Signature: {:?}\n", Into::<String>::into(&signature));
 
                 let dbus_type: DBusType = signature.as_str().into();
                 let dbus_value: DBusValue = args.into();
-
-                println!("Found method: {:?}\n", method);
-                println!("Signature: {:?}\n", Into::<String>::into(&signature));
 
                 do_call(
                     connection,
@@ -212,6 +216,8 @@ fn call(
                         dbus_value: &dbus_value,
                     },
                 );
+            } else {
+                println!("No method: {} found!", method_name)
             }
         }
     }
@@ -241,14 +247,14 @@ fn do_call(
                 }
             }
         }
-        Err(e) => println!("Invalid argument: {:?}", e),
+        Err(e) => panic!("Invalid argument: {:?}", e),
     }
 
     let response = connection
         .channel()
         .send_with_reply_and_block(message, Duration::from_secs(1));
 
-    print!("{:?}", response.unwrap())
+    println!("{:?}", response.unwrap())
 }
 
 fn list_names(connection: Connection) {
@@ -258,6 +264,7 @@ fn list_names(connection: Connection) {
         .unwrap();
 
     println!("bus names:\n");
+
     names.iter().for_each(|name| println!("    {}", name));
 }
 
@@ -267,12 +274,14 @@ fn introspect(connection: &Connection, bus_name: &String, path: &String) {
     let entries = describe(bus_name, path, connection);
 
     println!("paths:\n");
+
     entries.iter().for_each(|entry| match entry {
         Entry::Node { name } => print(1, name),
         _ => {}
     });
 
     println!("\ninterfaces:\n");
+    
     entries.iter().for_each(|entry| match entry {
         Entry::Interface { name, methods } => {
             print(1, name);
