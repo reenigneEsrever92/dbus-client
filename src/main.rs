@@ -11,7 +11,7 @@ use dbus::{
 use dbus_type::DBusType;
 use dbus_value::DBusValue;
 use itertools::Itertools;
-use log::{debug, warn, info, LevelFilter};
+use log::{debug, info, warn, LevelFilter};
 use simple_logger::SimpleLogger;
 use xml::{
     attribute::OwnedAttribute,
@@ -190,19 +190,21 @@ fn call(
             if let Some(method) = method {
                 debug!("Found method: {:?}\n", method);
 
-                let signature = format!(
-                    "({})",
-                    method
-                        .args
-                        .iter()
-                        .filter(|arg| arg.direction.eq(&Some("in".into())))
-                        .map(|arg| arg.typ.clone())
-                        .join("")
-                );
+                let signature = method
+                    .args
+                    .iter()
+                    .filter(|arg| arg.direction.eq(&Some("in".into())))
+                    .map(|arg| arg.typ.clone())
+                    .join("");
 
                 debug!("Signature: {:?}\n", Into::<String>::into(&signature));
 
-                let dbus_type: DBusType = signature.as_str().into();
+                let dbus_type: DBusType = if signature.is_empty() { 
+                    signature.as_str().into()
+                } else {
+                    format!("({})", signature).as_str().into()
+                };
+                
                 let dbus_value: DBusValue = args.into();
 
                 do_call(
@@ -281,7 +283,7 @@ fn introspect(connection: &Connection, bus_name: &String, path: &String) {
     });
 
     println!("\ninterfaces:\n");
-    
+
     entries.iter().for_each(|entry| match entry {
         Entry::Interface { name, methods } => {
             print(1, name);
